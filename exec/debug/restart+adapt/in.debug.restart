@@ -1,0 +1,35 @@
+###################################
+# Simulation parameters
+###################################
+seed	    	    8383848
+read_restart        restart.equil
+timestep            2.0e-9
+
+###################################
+# Grid generation
+###################################
+balance_grid        rcb part
+
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+collide		    vss all xe.vss
+
+collide_modify      vremax 100000 no vibrate no rotate no nearcp yes 100
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+variable            R equal 0.0005 
+variable            L equal ${R}*1.005
+
+#read_surf           sdata.circle3 group 1 scale ${R} ${R} 1.0
+surf_collide        1 diffuse 300 1.00 rotate 0.0 0.0 0.0 0.0 0.0 0.0
+surf_modify         1 collide 1
+
+###################################
+# Unsteady Output
+###################################
+stats_style         step cpu np nattempt ncoll maxlevel
+stats               100
+run                 1000

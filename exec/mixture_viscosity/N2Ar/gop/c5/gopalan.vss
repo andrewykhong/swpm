@@ -1,0 +1,16 @@
+﻿# VSS collision model parameters for each species
+# Gopalan 2016
+
+# species (or species pair)
+# diameter (m)
+# omega
+# tref
+# alpha
+
+N2   	3.944E-10    0.672    273.15    1.370
+O2	3.806E-10    0.689    273.15    1.402
+Ar  	3.899E-10    0.709    273.15    1.416
+
+N2 O2   3.563E-10    0.700    273.15    1.397
+N2 Ar   3.732E-10    0.686    273.15    1.373
+O2 Ar   3.886E-10    0.710    273.15    1.419

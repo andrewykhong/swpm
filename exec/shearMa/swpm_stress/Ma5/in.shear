@@ -1,0 +1,145 @@
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+
+seed               36917
+dimension          3
+global             gridcut 1.0e-8 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.6667
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 273.15
+variable p         equal 1013.25
+variable Ma        equal 5.0
+variable ppc       equal 100.0
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 6.63e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable RT        equal ${R_ref}*${T}
+variable rho       equal ${p}/${RT}
+variable nden      equal ${rho}/${mass_ref}
+variable mu_ref    equal 2.117e-5
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT}*0.5)
+variable cbar      equal sqrt(2.*${RT})
+variable a         equal sqrt(${gamma}*${RT})
+variable vb        equal ${Ma}*${a}
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar vstream ${vb} 0.0 0.0 temp ${T}
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+collide_modify     remain no
+
+# 6 arguments "swpm" yes/no Nmin Nmax mxDpthBST Ggamma energy/heat/stress
+# particles ideally groups into 2^mxDpthBST groups which then merge
+# therefore number of particles after merge is (2 or 6)*2^mxDpthBST
+collide_modify     swpm yes 100.0 200.0 12.0 1.0 stress
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 6.245e-5
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 5000
+variable nz        equal 1
+
+boundary           p s p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_grid        ${nx} ${ny} ${nz} block * * * 
+balance_grid       rcb part
+
+surf_collide       1 diffuse ${T} 1.0 translate -${vb}  0.0 0.0
+surf_collide       2 diffuse ${T} 1.0 translate ${vb} 0.0 0.0
+
+bound_modify       ylo collide 1
+bound_modify       yhi collide 2
+
+variable N         equal ${ny}*${ppc}
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+
+global nrho ${nden}
+global fnum ${Fnum}
+
+variable y         internal 0.0
+variable vx        equal "(1.0-2.0*(yhi-v_y)/(yhi-ylo))*v_vb"
+create_particles   air n ${N} velocity vx NULL NULL NULL y NULL
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable dy        equal ${Ly}/${ny}
+variable dyolam    equal ${dy}/${lam}
+variable dt        equal 1.0e-12
+variable Nsteady   equal ceil(${td}/${dt})*5.0
+variable tsteady   equal ${Nsteady}*${dt}
+variable Kn_g      equal ${lam}/${Ly}
+
+#####################################
+# Print variable values to log file #
+##################################### 
+print " Boundary velocity = ${vb}"
+print " Most probable speed = ${cbar}" 
+print " Mean free path = ${lam}"
+print " Kn_system = ${Kn_g}"
+print " dy/lam = ${dyolam}"
+print " Time step=${dt}"
+print " Diffusion time in dt=${Nsteady}"
+
+###########
+# Outputs #
+###########
+compute state      thermal/grid/sw all all temp press
+compute rho        grid/sw all all n nrho coruy corvy corwy
+compute vel        grid/sw all all u v w
+compute mom        pflux/grid/sw all all momxx momyy momzz momxy momyz momxz
+compute q          eflux/grid/sw all all heatx heaty heatz
+
+#############
+# Transient #
+#############
+stats              100000
+stats_style        step np nattempt ncoll
+
+timestep           ${dt}
+run                50000000
+
+#################
+# Collect Stats #
+#################
+fix state         ave/grid all 5 2000 10000 c_state[*]  ave running
+fix rho           ave/grid all 5 2000 10000 c_rho[*]    ave running
+fix vel           ave/grid all 5 2000 10000 c_vel[*]    ave running
+fix mom           ave/grid all 5 2000 10000 c_mom[*]    ave running
+fix q             ave/grid all 5 2000 10000 c_q[*]      ave running
+
+dump state        grid all 50000000 state.* id yc f_rho[*] f_state[*]
+dump vel          grid all 50000000 vel.*   id yc f_vel[*]
+dump mom          grid all 50000000 vmom.*  id yc f_mom[*] f_q[*]
+
+run               200000000

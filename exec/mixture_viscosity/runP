@@ -1,0 +1,25 @@
+#!/bin/csh -f
+
+#SBATCH --nodes=4
+#SBATCH --time=48:00:00
+#SBATCH --account=fy150035
+#SBATCH --license=gpfs
+#SBATCH --job-name=N2Ar/gop/c5
+##SBATCH --mail-user=ayhong@sandia.gov
+##SBATCH --mail-type=ALL
+
+set nodes=$SLURM_JOB_NUM_NODES
+
+# processors per node
+# can check by sinfo --Node --long
+set cores=48
+@ ncpus=$nodes * $cores
+
+# Avoids error message at runtime about TMPDIR
+setenv TMPDIR /tmp/$SLURM_JOB_ID
+
+cd /pscratch/ayhong/sparta/exec/mixture_viscosity/N2Ar/gop/c5
+
+mpiexec --bind-to core --np $ncpus  /pscratch/ayhong/sparta/src/spa_mpi < in.mix_couette &
+
+wait

@@ -1,0 +1,207 @@
+###################
+# advect particles on uniform Cartesian grid
+# single-step moves that cross grid cell boundaries are detected
+# particle effectively moves from cell to cell
+# particles reflect off global box boundaries
+# Ma = 1.0
+
+###################################
+# Constants
+###################################
+variable        boltz equal 1.380658E-23
+variable        pi equal 3.14159
+
+###################################
+# Gas parameters (Xe)
+###################################
+variable        mue equal 2.107E-5
+variable        mass equal 2.18E-25
+variable        gamma equal 1.4
+
+###################################
+# Trajectory inputs
+###################################
+variable        Ma equal 4.0
+variable        temp equal 300.0  # [K]
+variable        uspeed equal sqrt(${gamma}*${boltz}*${temp}/${mass})
+variable        V equal ${Ma}*${uspeed}
+
+variable        p0 equal 100.0
+variable        nden equal ${p0}/(${boltz}*${temp})
+variable        rho equal ${nden}*${mass}
+
+variable        surftemp equal 300.0
+
+###################################
+# Simulation initialization standards
+###################################
+variable        R equal 1.0e-4 # baout 5 mfp (at wall)
+variable        L equal ${R}*1.005 # about 10 mfp
+
+variable        omega equal ${V}/${R} # [rev/s]
+
+###################################
+# Parameter calculations
+###################################
+variable        Vx equal ${V}
+variable        Vy equal ${V}
+
+variable        cbar equal sqrt(8./${pi}*${boltz}*${temp}/${mass})
+variable        dref equal 5.65E-10
+
+###################################
+variable        xmin equal -${R}
+variable        xmax equal ${R}
+variable        ymin equal -${R}
+variable        ymax equal ${R}
+
+###################################
+variable        xncells equal 25
+variable        yncells equal 25
+variable        ppc equal 2000.0
+
+variable        N equal ${ppc}*${xncells}*${yncells}
+variable        Fnum equal ${nden}*(${xmax}-${xmin})*(${ymax}-${ymin})/${N}
+
+variable        M equal 131.29/1000 # [kg/mol]
+variable        Ru equal 8.314 # [kg*m^2/(K*mol*s^2]
+variable        T equal ${temp} # [K]
+variable        dmin equal exp(0)
+variable        dmax equal exp(${M}*${omega}^2*${R}^2/2/${Ru}/${T})
+
+# at wall
+variable        mfp equal ${mue}/${p0}/${dmax}*sqrt(${pi}*${boltz}*${temp}*0.5/${mass})
+
+variable        tc equal ${mfp}/${dmax}/${cbar}
+variable        tstep equal ${tc}*5
+
+###################################
+# Print variable values to log file
+###################################
+print           " Velocity  = ${V}"
+print           " Density  = ${nden}"
+print           " Fn  = ${Fnum}"
+print           " X-Velocity  = ${Vx}"
+print           " Y-Velocity  = ${Vy}"
+print           " Density  = ${nden}"
+print           " dmin  = ${dmin}"
+print           " dmax  = ${dmax}"
+print           " Temp  = ${temp}"
+print           " cbar  = ${cbar}"
+print           " mean free path  = ${mfp}"
+print           " sound speed  = ${uspeed}"
+print           " x-min = ${xmin}"
+print           " x-max = ${xmax}"
+print           " y-min = ${ymin}"
+print           " y-max = ${ymax}"
+print           " L = ${L}"
+print           " x-cells = ${xncells}"
+print           " y-cells = ${yncells}"
+print           " Simulation Ratio = ${Fnum}"
+print           " Min collision time = ${tc}"
+print           " Time Step = ${tstep}"
+
+###################################
+# Simulation parameters
+###################################
+seed            29482
+dimension       2
+global          nrho ${nden}
+global          fnum ${Fnum}
+timestep        1.0e-11
+global          gridcut 0.000
+global          surfmax 200
+
+###################################
+# Grid generation
+###################################
+boundary        p p p
+create_box      -${L} ${L} -${L} ${L} -${L} ${L} 
+create_grid     ${xncells} ${yncells} 1 block * * * 
+
+balance_grid    rcb part
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+species         xe.species Xe 
+
+mixture         all vstream 0.0 0.0  0.0 temp ${temp}
+collide         vss all xe.vss relax constant 
+mixture         all Xe frac 1.000
+
+collide_modify  vremax 100000 no vibrate no rotate no remain no
+collide_modify  swpm yes 2048.0 1.0
+collide_modify  RW 4096.0 4.0
+collide_modify  reduceMin yes
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+read_surf       sdata.circle3 group 1 scale ${R} ${R} 1.0
+surf_collide    1 diffuse ${surftemp} 1.00 rotate 0.0 0.0 0.0 0.0 0.0 ${omega}
+surf_modify     1 collide 1
+
+###################################
+# Initialize simulation
+###################################
+variable        x internal 0
+variable        y internal 0
+variable        z internal 0
+
+
+variable        d equal "exp(v_M*v_omega^2*(v_x^2+v_y^2)/2/v_Ru/v_T)"
+variable        vx equal "-v_omega*v_y"
+variable        vy equal "v_omega*v_x"
+variable        vz equal "0.0"
+
+#create_particles all n 0 density d x y NULL velocity vx vy vz x y NULL
+create_particles all n 0
+
+###################################
+# Unsteady Output
+###################################
+compute         1 grid/sw all species n nrho u v
+compute         2 thermal/grid/sw all all temp
+compute         3 pflux/grid/sw all all momxx momyy momxy
+
+fix             1 ave/grid all 5 2000 10000 c_1[*] ave one
+fix             2 ave/grid all 5 2000 10000 c_2[*] ave one
+fix             3 ave/grid all 5 2000 10000 c_3[*] ave one
+
+dump            1 grid all 50000 tmp_flow.* xc yc f_1[*] 
+dump            2 grid all 50000 tmp_temp.* xc yc f_2[*]
+dump            3 grid all 50000 tmp_vmom.* xc yc f_3[*] 
+
+fix             load balance 5000 1.1 rcb time
+
+stats_style     step cpu np nattempt ncoll maxlevel
+stats           1000
+run             1000000
+
+###################################
+# Steady State Output
+###################################
+unfix           1
+unfix           2
+unfix           3
+unfix           load
+
+undump          1
+undump          2
+undump          3
+
+fix             1 ave/grid all 5 2000 10000 c_1[*] ave running
+fix             2 ave/grid all 5 2000 10000 c_2[*] ave running
+fix             3 ave/grid all 5 2000 10000 c_3[*] ave running
+
+dump            1 grid all 100000 std_flow.* xc yc f_1[*] 
+dump            2 grid all 100000 std_temp.* xc yc f_2[*]
+dump            3 grid all 100000 std_vmom.* xc yc f_3[*] 
+
+collide_modify  vremax 0 no
+
+stats_style     step cpu np nattempt ncoll maxlevel
+stats           1000
+run             5000000
+
+

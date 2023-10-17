@@ -1,0 +1,26 @@
+SPARTA (18 Jul 2022)
+Running on 2 MPI task(s)
+Created orthogonal box = (0 0 0) to (0.0001 4e-05 0.0001)
+Created 5000 child grid cells
+  CPU time = 0.00190492 secs
+  create/ghost percent = 42.039 57.961
+Balance grid migrated 0 cells
+  CPU time = 0.000883756 secs
+  reassign/sort/migrate/ghost percent = 33.0459 0.727237 7.25517 58.9717
+Creating particles ...
+Created 320000 particles
+  CPU time = 0.0690854 secs
+ Boundary velocity = 67.899953212355
+ Most probable speed = 405.779833259367
+ Mean free path = 7.09820601360159e-08
+ Kn_system = 0.0017745515034004
+ dy/lam = 0.112704533859265
+ Time step=1e-12
+ Diffusion time in dt=492295290
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 18.125 18.125 18.125
+  grid      (ave,min,max) = 1.57629 1.57629 1.57629
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 20.3879 20.3879 20.3879
+Step Np Natt Ncoll 
+       0   320000        0        0 

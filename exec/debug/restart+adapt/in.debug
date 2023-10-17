@@ -1,0 +1,57 @@
+###################################
+# Simulation parameters
+###################################
+seed	    	    8383848
+dimension   	    2
+global		    nrho 1.0e20
+global              fnum 2.0e10
+timestep            2.0e-9
+global              gridcut 0.000
+global              surfmax 200
+
+###################################
+# Grid generation
+###################################
+variable            R equal 0.0005 
+variable            L equal ${R}*1.005
+
+boundary	    p p p
+create_box          -${L} ${L} -${L} ${L} -${L} ${L}
+create_grid 	    5 5 1 block * * *  
+
+balance_grid        rcb part
+
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+species             xe.species Xe 
+
+mixture             all vstream 0.0 0.0  0.0 temp 300
+collide		    vss all xe.vss
+mixture             all Xe frac 1.000
+
+collide_modify      vremax 100000 no vibrate no rotate no nearcp yes 100
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+read_surf           sdata.circle3 group 1 scale ${R} ${R} 1.0
+surf_collide        1 diffuse 300 1.00 rotate 0.0 0.0 0.0 0.0 0.0 0.0
+surf_modify         1 collide 1
+
+###################################
+# Initialize simulation
+###################################
+create_particles all n 2500
+
+###################################
+# Unsteady Output
+###################################
+fix                 1 adapt 100 all refine coarsen particle 80 5 &
+                    cells 2 2 1 maxlevel 2
+
+stats_style         step cpu np nattempt ncoll maxlevel
+stats               100
+run                 1000
+write_grid          grid.out
+write_restart       restart.equil

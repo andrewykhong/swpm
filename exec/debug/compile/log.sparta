@@ -1,0 +1,365 @@
+SPARTA (18 Jul 2022)
+Running on 1 MPI task(s)
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+
+seed               66510
+dimension          3
+global             gridcut 1.0e-8 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.4
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 300.0
+variable p         equal 1013.25
+variable Ma        equal 0.2
+variable ppc       equal 40
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 5.0e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable R_ref     equal 1.380658e-23/${mass_ref}
+variable R_ref     equal 1.380658e-23/5e-26
+variable RT        equal ${R_ref}*${T}
+variable RT        equal 276.1316*${T}
+variable RT        equal 276.1316*300
+variable rho       equal ${p}/${RT}
+variable rho       equal 1013.25/${RT}
+variable rho       equal 1013.25/82839.48
+variable nden      equal ${rho}/${mass_ref}
+variable nden      equal 0.0122314867258945/${mass_ref}
+variable nden      equal 0.0122314867258945/5e-26
+variable mu_ref    equal 2.0e-9
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/1013.25*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/1013.25*sqrt(3.14159*${RT}*0.5)
+variable lam       equal 2e-09/1013.25*sqrt(3.14159*82839.48*0.5)
+variable cbar      equal sqrt(2.*${RT})
+variable cbar      equal sqrt(2.*82839.48)
+variable a         equal sqrt(${gamma}*${RT})
+variable a         equal sqrt(1.4*${RT})
+variable a         equal sqrt(1.4*82839.48)
+variable vb        equal 0.0
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar temp ${T}
+mixture            air Ar temp 300
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+
+# 6 arguments "swpm" yes/no Nmin Nmax mxDpthBST Ggamma qconserve(yes/no)
+# particles ideally groups into 2^mxDpthBST groups which then merge
+# therefore number of particles after merge is (2 or 6)*2^mxDpthBST
+collide_modify     swpm yes 80.0 400.0 6.0 1.0 no
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 4.0e-5
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 1
+variable nz        equal 1
+
+boundary           p p p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_box         0 0.0001 0 ${Ly} 0 ${Lz}
+create_box         0 0.0001 0 4e-05 0 ${Lz}
+create_box         0 0.0001 0 4e-05 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 4e-05 0.0001)
+create_grid        ${nx} ${ny} ${nz} block * * *
+create_grid        1 ${ny} ${nz} block * * *
+create_grid        1 1 ${nz} block * * *
+create_grid        1 1 1 block * * *
+Created 1 child grid cells
+  CPU time = 0.000814869 secs
+  create/ghost percent = 96.9398 3.06025
+balance_grid       rcb part
+Balance grid migrated 0 cells
+  CPU time = 8.7339e-05 secs
+  reassign/sort/migrate/ghost percent = 63.4505 0.062973 31.7063 4.78022
+
+#surf_collide       1 diffuse 500 1.0 translate ${vb}  0.0 0.0
+#surf_collide       2 diffuse 500 1.0 translate -${vb} 0.0 0.0
+
+#bound_modify       ylo collide 1
+#bound_modify       yhi collide 2
+
+variable N         equal ${ny}*${nx}*${nz}*${ppc}
+variable N         equal 1*${nx}*${nz}*${ppc}
+variable N         equal 1*1*${nz}*${ppc}
+variable N         equal 1*1*1*${ppc}
+variable N         equal 1*1*1*40
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+23/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+23/(40/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+23/(40/(0.0001*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+23/(40/(0.0001*4e-05*${Lz}))
+variable Fnum      equal 2.4462973451789e+23/(40/(0.0001*4e-05*0.0001))
+
+global nrho ${nden}
+global nrho 2.4462973451789e+23
+global fnum ${Fnum}
+global fnum 2446297345.1789
+
+variable y         internal 0.0
+variable vx        equal "(2*(yhi-v_y)/(yhi-ylo)-1)*v_vb"
+
+create_particles   air n ${N}
+create_particles   air n 40
+Created 40 particles
+  CPU time = 0.000617331 secs
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable td        equal 0.0122314867258945*${Ly}*${Ly}/${mu_ref}
+variable td        equal 0.0122314867258945*4e-05*${Ly}/${mu_ref}
+variable td        equal 0.0122314867258945*4e-05*4e-05/${mu_ref}
+variable td        equal 0.0122314867258945*4e-05*4e-05/2e-09
+variable dy        equal ${Ly}/${ny}
+variable dy        equal 4e-05/${ny}
+variable dy        equal 4e-05/1
+variable dyolam    equal ${dy}/${lam}
+variable dyolam    equal 4e-05/${lam}
+variable dyolam    equal 4e-05/7.12019389518366e-10
+variable dt        equal 1.0e-9
+variable Nsteady   equal ceil(${td}/${dt})*5.0
+variable Nsteady   equal ceil(0.0097851893807156/${dt})*5.0
+variable Nsteady   equal ceil(0.0097851893807156/1e-09)*5.0
+variable tsteady   equal ${Nsteady}*${dt}
+variable tsteady   equal 48925950*${dt}
+variable tsteady   equal 48925950*1e-09
+variable Kn_g      equal ${lam}/${Ly}
+variable Kn_g      equal 7.12019389518366e-10/${Ly}
+variable Kn_g      equal 7.12019389518366e-10/4e-05
+
+#####################################
+# Print variable values to log file #
+#####################################
+print " Boundary velocity = ${vb}"
+ Boundary velocity = 0
+print " Most probable speed = ${cbar}"
+ Most probable speed = 407.036804232738
+print " Mean free path = ${lam}"
+ Mean free path = 7.12019389518366e-10
+print " Kn_system = ${Kn_g}"
+ Kn_system = 1.78004847379591e-05
+print " dy/lam = ${dyolam}"
+ dy/lam = 56178.2454085378
+print " Time step=${dt}"
+ Time step=1e-09
+print " Diffusion time in dt=${Nsteady}"
+ Diffusion time in dt=48925950
+
+###########
+# Outputs #
+###########
+compute state_sw      thermal/grid/sw all all temp press
+compute rho_sw        grid/sw all all n nrho
+compute vel_sw        grid/sw all all u v w
+compute mom_sw        pflux/grid/sw all all momxx momyy momzz momxy momyz momxz
+compute q_sw          eflux/grid/sw all all heatx heaty heatz
+compute cnt_sw        grid/sw all all n
+
+#############
+# Transient #
+#############
+fix 1            ave/grid all 1 2 2 c_state_sw[*]  ave one
+#dump 1           grid all 2000 out_swpm.* f_1[*]
+
+compute 1n reduce ave c_rho_sw[1]
+compute 1nrho reduce ave c_rho_sw[2]
+compute 1vx reduce ave c_vel_sw[1]
+compute 1vy reduce ave c_vel_sw[2]
+compute 1vz reduce ave c_vel_sw[3]
+compute 1T reduce ave c_state_sw[1]
+
+stats              5
+stats_style        step np nattempt ncoll c_1T
+#stats_style        step c_1n c_1nrho c_1vx c_1vy c_1vz c_1T
+
+timestep           ${dt}
+timestep           1e-09
+run               500
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.8125 1.8125 1.8125
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.32669 3.32669 3.32669
+Step Np Natt Ncoll c_1T 
+       0       40        0        0    325.21323 
+       5       84       13        8    325.21323 
+      10      101        9        5    325.21323 
+      15      125       11        5    325.21323 
+      20      155       13        8    325.21323 
+      25      186       16        5    325.21323 
+      30      223       20       10    325.21323 
+      35      268       24       10    325.21323 
+      40      315       28       10    325.21323 
+      45      380       33       19    325.21323 
+      50       97        8        7    325.21323 
+      55      125       11        5    325.21323 
+      60      160       14        8    325.21323 
+      65      207       18       11    325.21323 
+      70      265       22       17    325.21323 
+      75      354       31       20    325.21323 
+      80       84        8        2    325.21323 
+      85      105        9        6    325.21323 
+      90      137       12        9    325.21323 
+      95      174       18        9    325.21323 
+     100      222       22        8    325.21323 
+     105      278       27       11    325.21323 
+     110      362       35       17    325.21323 
+     115       92        9        5    325.21323 
+     120      117       11        4    325.21323 
+     125      157       16        7    325.21323 
+     130      212       21       14    325.21323 
+     135      268       27       13    325.21323 
+     140      333       34       11    325.21323 
+     145       85        9        3    325.21323 
+     150      107       11        3    325.21323 
+     155      138       14        6    325.21323 
+     160      172       18        6    325.21323 
+     165      231       23        9    325.21323 
+     170      295       30       15    325.21323 
+     175      388       40       17    325.21323 
+     180      102       11        5    325.21323 
+     185      125       14        5    325.21323 
+     190      165       18        8    325.21323 
+     195      215       22       11    325.21323 
+     200      288       30       19    325.21323 
+     205      374       40       19    325.21323 
+     210       97       10        3    325.21323 
+     215      134       14        7    325.21323 
+     220      171       18        7    325.21323 
+     225      227       25        9    325.21323 
+     230      287       30       12    325.21323 
+     235      361       38       21    325.21323 
+     240       89       10        5    325.21323 
+     245      123       12       10    325.21323 
+     250      158       16        8    325.21323 
+     255      205       22       12    325.21323 
+     260      265       28       15    325.21323 
+     265      341       36       15    325.21323 
+     270       85       16        8    325.21323 
+     275      113       11        7    325.21323 
+     280      146       15       10    325.21323 
+     285      185       20        9    325.21323 
+     290      232       24       14    325.21323 
+     295      311       33       16    325.21323 
+     300      400       43       18    325.21323 
+     305       99       11        3    325.21323 
+     310      133       14        6    325.21323 
+     315      161       17       10    325.21323 
+     320      205       22        8    325.21323 
+     325      270       29       16    325.21323 
+     330      337       36       19    325.21323 
+     335       85       17        6    325.21323 
+     340      115       12        9    325.21323 
+     345      148       15        9    325.21323 
+     350      192       20        6    325.21323 
+     355      245       26       12    325.21323 
+     360      313       33       14    325.21323 
+     365      397       42       20    325.21323 
+     370      111       12        6    325.21323 
+     375      140       16        4    325.21323 
+     380      186       20       11    325.21323 
+     385      244       26       15    325.21323 
+     390      322       36       14    325.21323 
+     395       70       45       20    325.21323 
+     400       99       10        3    325.21323 
+     405      128       14        7    325.21323 
+     410      167       18       10    325.21323 
+     415      214       23       10    325.21323 
+     420      282       30       15    325.21323 
+     425      367       40       17    325.21323 
+     430       88       10        4    325.21323 
+     435      118       13        6    325.21323 
+     440      148       16       11    325.21323 
+     445      194       21       13    325.21323 
+     450      253       27       13    325.21323 
+     455      315       34       15    325.21323 
+     460       81       16        5    325.21323 
+     465       98       10        4    325.21323 
+     470      133       15        7    325.21323 
+     475      176       19       12    325.21323 
+     480      224       24       12    325.21323 
+     485      295       32       19    325.21323 
+     490      372       40       21    325.21323 
+     495       96       11        5    325.21323 
+     500      122       13        6    325.21323 
+Loop time of 0.0077131 on 1 procs for 500 steps with 122 particles
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.00078501 | 0.00078501 | 0.00078501 |   0.0 | 10.18
+Coll    | 0.0043706  | 0.0043706  | 0.0043706  |   0.0 | 56.66
+Sort    | 0.00013811 | 0.00013811 | 0.00013811 |   0.0 |  1.79
+Comm    | 3.9939e-05 | 3.9939e-05 | 3.9939e-05 |   0.0 |  0.52
+Modify  | 0.00056437 | 0.00056437 | 0.00056437 |   0.0 |  7.32
+Output  | 0.0017481  | 0.0017481  | 0.0017481  |   0.0 | 22.66
+Other   |            | 6.703e-05  |            |       |  0.87
+
+Particle moves    = 98126 (98.1K)
+Cells touched     = 99174 (99.2K)
+Particle comms    = 0 (0K)
+Boundary collides = 0 (0K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 10683 (10.7K)
+Collide occurs    = 5157 (5.16K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.2722e+07
+Particle-moves/step: 196.252
+Cell-touches/particle/step: 1.01068
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.10887
+Collisions/particle/step: 0.0525549
+Reactions/particle/step: 0
+
+Particles: 122 ave 122 max 122 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1 ave 1 max 1 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

@@ -1,0 +1,383 @@
+SPARTA (18 Jul 2022)
+Running on 2 MPI task(s)
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+
+seed               5127
+dimension          3
+global             gridcut 1.0e-8 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.4
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 300.0
+variable p         equal 101325.00
+variable Ma        equal 0.2
+variable ppc       equal 185
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 5.0e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable R_ref     equal 1.380658e-23/${mass_ref}
+variable R_ref     equal 1.380658e-23/5e-26
+variable RT        equal ${R_ref}*${T}
+variable RT        equal 276.1316*${T}
+variable RT        equal 276.1316*300
+variable rho       equal ${p}/${RT}
+variable rho       equal 101325/${RT}
+variable rho       equal 101325/82839.48
+variable nden      equal ${rho}/${mass_ref}
+variable nden      equal 1.22314867258945/${mass_ref}
+variable nden      equal 1.22314867258945/5e-26
+variable mu_ref    equal 2.0e-9
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/101325*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-09/101325*sqrt(3.14159*${RT}*0.5)
+variable lam       equal 2e-09/101325*sqrt(3.14159*82839.48*0.5)
+variable cbar      equal sqrt(2.*${RT})
+variable cbar      equal sqrt(2.*82839.48)
+variable a         equal sqrt(${gamma}*${RT})
+variable a         equal sqrt(1.4*${RT})
+variable a         equal sqrt(1.4*82839.48)
+variable vb        equal 0.0
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar vstream 0 0 0  temp ${T}
+mixture            air Ar vstream 0 0 0  temp 300
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+collide_modify     remain no
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 4.0e-7
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 50
+variable nz        equal 1
+
+boundary           p s p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_box         0 0.0001 0 ${Ly} 0 ${Lz}
+create_box         0 0.0001 0 4e-07 0 ${Lz}
+create_box         0 0.0001 0 4e-07 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 4e-07 0.0001)
+create_grid        ${nx} ${ny} ${nz} block * * *
+create_grid        1 ${ny} ${nz} block * * *
+create_grid        1 50 ${nz} block * * *
+create_grid        1 50 1 block * * *
+Created 50 child grid cells
+  CPU time = 0.0020794 secs
+  create/ghost percent = 88.2034 11.7966
+balance_grid       rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000681437 secs
+  reassign/sort/migrate/ghost percent = 37.0589 0.515675 6.2603 56.1651
+
+surf_collide       1 diffuse 300 1.0 translate ${vb}  0.0 0.0
+surf_collide       1 diffuse 300 1.0 translate 0  0.0 0.0
+surf_collide       2 diffuse 400 1.0 translate -${vb} 0.0 0.0
+surf_collide       2 diffuse 400 1.0 translate -0 0.0 0.0
+
+bound_modify       ylo collide 1
+bound_modify       yhi collide 2
+
+variable N         equal ${ny}*${nx}*${nz}*${ppc}
+variable N         equal 50*${nx}*${nz}*${ppc}
+variable N         equal 50*1*${nz}*${ppc}
+variable N         equal 50*1*1*${ppc}
+variable N         equal 50*1*1*185
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+25/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+25/(9250/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+25/(9250/(0.0001*${Ly}*${Lz}))
+variable Fnum      equal 2.4462973451789e+25/(9250/(0.0001*4e-07*${Lz}))
+variable Fnum      equal 2.4462973451789e+25/(9250/(0.0001*4e-07*0.0001))
+
+global nrho ${nden}
+global nrho 2.4462973451789e+25
+global fnum ${Fnum}
+global fnum 10578583.1142871
+
+variable y         internal 0.0
+variable t         equal "1.0 + (100/300)*(v_y-xlo)/(xhi-xlo)"
+
+create_particles   air n ${N} temperature t NULL y NULL
+create_particles   air n 9250 temperature t NULL y NULL
+Created 9250 particles
+  CPU time = 0.0601753 secs
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable td        equal 1.22314867258945*${Ly}*${Ly}/${mu_ref}
+variable td        equal 1.22314867258945*4e-07*${Ly}/${mu_ref}
+variable td        equal 1.22314867258945*4e-07*4e-07/${mu_ref}
+variable td        equal 1.22314867258945*4e-07*4e-07/2e-09
+variable dy        equal ${Ly}/${ny}
+variable dy        equal 4e-07/${ny}
+variable dy        equal 4e-07/50
+variable dyolam    equal ${dy}/${lam}
+variable dyolam    equal 8e-09/${lam}
+variable dyolam    equal 8e-09/7.12019389518366e-12
+variable dt        equal 4.0e-12
+variable Nsteady   equal ceil(${td}/${dt})*5.0
+variable Nsteady   equal ceil(9.7851893807156e-05/${dt})*5.0
+variable Nsteady   equal ceil(9.7851893807156e-05/4e-12)*5.0
+variable tsteady   equal ${Nsteady}*${dt}
+variable tsteady   equal 122314870*${dt}
+variable tsteady   equal 122314870*4e-12
+variable Kn_g      equal ${lam}/${Ly}
+variable Kn_g      equal 7.12019389518366e-12/${Ly}
+variable Kn_g      equal 7.12019389518366e-12/4e-07
+
+#####################################
+# Print variable values to log file #
+#####################################
+print " Boundary velocity = ${vb}"
+ Boundary velocity = 0
+print " Most probable speed = ${cbar}"
+ Most probable speed = 407.036804232738
+print " Mean free path = ${lam}"
+ Mean free path = 7.12019389518366e-12
+print " Kn_system = ${Kn_g}"
+ Kn_system = 1.78004847379592e-05
+print " dy/lam = ${dyolam}"
+ dy/lam = 1123.56490817076
+print " Time step=${dt}"
+ Time step=4e-12
+print " Diffusion time in dt=${Nsteady}"
+ Diffusion time in dt=122314870
+
+###########
+# Outputs #
+###########
+compute state_sw      thermal/grid/sw all all temp press
+compute rho_sw        grid/sw all all n nrho coruy corvy corwy
+compute vel_sw        grid/sw all all u v w
+compute mom_sw        pflux/grid/sw all all momxx momyy momzz momxy momyz momxz
+compute q_sw          eflux/grid/sw all all heatx heaty heatz
+compute cnt_sw        grid/sw all all n
+
+#############
+# Transient #
+#############
+compute 1n reduce ave c_rho_sw[1]
+compute 1nrho reduce ave c_rho_sw[2]
+compute 1vx reduce ave c_vel_sw[1]
+compute 1vy reduce ave c_vel_sw[2]
+compute 1vz reduce ave c_vel_sw[3]
+compute 1T reduce max c_state_sw[1]
+
+stats              20000
+stats_style        step np nattempt ncoll c_1T nbound nboundave
+
+timestep           ${dt}
+timestep           4e-12
+run               100000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.8125 1.8125 1.8125
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.33259 3.33259 3.33259
+Step Np Natt Ncoll c_1T Nbound Nboundave 
+       0     9250        0        0    354.57657        0            0 
+   20000     9250      215      130     431.5763       15      19.9036 
+   40000     9250      218      134    412.92435       16      19.9208 
+   60000     9250      220      145    417.15868       26    19.908733 
+   80000     9250      224      140     407.9651       17    19.905975 
+  100000     9250      225      137     429.6758       19     19.90799 
+Loop time of 17.3079 on 2 procs for 100000 steps with 9250 particles
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 6.4008     | 6.5702     | 6.7396     |   6.6 | 37.96
+Coll    | 3.6053     | 3.8479     | 4.0905     |  12.4 | 22.23
+Sort    | 0.90678    | 0.92737    | 0.94796    |   2.1 |  5.36
+Comm    | 2.4105     | 2.4602     | 2.51       |   3.2 | 14.21
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00031875 | 0.00061018 | 0.00090162 |   0.0 |  0.00
+Other   |            | 3.502      |            |       | 20.23
+
+Particle moves    = 925000000 (925M)
+Cells touched     = 1022319937 (1.02B)
+Particle comms    = 1983334 (1.98M)
+Boundary collides = 1990799 (1.99M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 21905773 (21.9M)
+Collide occurs    = 13553673 (13.6M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 2.6722e+07
+Particle-moves/step: 9250
+Cell-touches/particle/step: 1.10521
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.00214414
+Particle fraction colliding with boundary: 0.00215222
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0236819
+Collisions/particle/step: 0.0146526
+Reactions/particle/step: 0
+
+Particles: 4625 ave 4777 max 4473 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Cells:      25 ave 25 max 25 min
+Histogram: 2 0 0 0 0 0 0 0 0 0
+GhostCell: 2 ave 2 max 2 min
+Histogram: 2 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 0
+
+##########
+# Steady #
+##########
+reset_timestep 0
+fix 1a            ave/grid all 5 200 1000 c_state_sw[*] c_vel_sw[*] ave running
+fix 1b            ave/grid all 5 200 1000 c_rho_sw[*] ave running
+fix 1c            ave/grid all 5 200 1000 c_q_sw[*] ave running
+dump 1            grid all 100000 out_dsmc.* yc f_1a[*] f_1b[*] f_1c[*]
+
+timestep           ${dt}
+timestep           4e-12
+run               1000000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.8125 1.8125 1.8125
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.33926 3.33926 3.33926
+Step Np Natt Ncoll c_1T Nbound Nboundave 
+       0     9250      225      137     429.6758        0            0 
+   20000     9250      215      145    417.28403       23      19.8865 
+   40000     9250      215      128    394.77724       22      19.8894 
+   60000     9250      223      129    396.12787       15    19.895917 
+   80000     9250      223      130    416.46143       25    19.894725 
+  100000     9250      222      131    436.71405       25     19.89806 
+  120000     9250      222      137    402.16846       15    19.899675 
+  140000     9250      227      145    402.13011       22       19.902 
+  160000     9250      226      148    425.16264       27    19.903862 
+  180000     9250      225      149    410.55082       29    19.902861 
+  200000     9250      225      124      412.854       26    19.899935 
+  220000     9250      222      123    404.75614       21    19.899086 
+  240000     9250      226      128    396.01863       21    19.898304 
+  260000     9250      223      126    418.40243       20    19.897173 
+  280000     9250      222      133    422.27556       24    19.899646 
+  300000     9250      222      141    398.30475       20    19.896097 
+  320000     9250      226      126     402.5908       18    19.895688 
+  340000     9250      226      131    410.50524       16    19.897668 
+  360000     9250      220      139    417.26204       19    19.898811 
+  380000     9250      219      126    410.32839       27    19.899268 
+  400000     9250      225      139    432.70011       14    19.898865 
+  420000     9250      222      120    438.68274       18    19.899505 
+  440000     9250      222      128    403.28508       26    19.900457 
+  460000     9250      223      133     429.4179       23    19.898737 
+  480000     9250      224      118    420.83282       21    19.899808 
+  500000     9250      221      139    415.94185       15    19.901606 
+  520000     9250      229      143    422.03192       21    19.901777 
+  540000     9250      229      143    401.87644       14    19.902489 
+  560000     9250      230      125    423.64353       23    19.902373 
+  580000     9250      225      134    389.22384       21    19.903234 
+  600000     9250      230      131    433.20379       23    19.903083 
+  620000     9250      228      141    403.02411       12    19.903469 
+  640000     9250      227      144    412.72235       13    19.903428 
+  660000     9250      227      133    400.80511       15     19.90223 
+  680000     9250      226      137    406.60237       16    19.903463 
+  700000     9250      226      119    417.97073       19    19.904319 
+  720000     9250      227      134    427.75554       18    19.904567 
+  740000     9250      229      145    411.15974       22    19.904476 
+  760000     9250      225      130    390.11452       18    19.904376 
+  780000     9250      228      133    402.04068       16    19.904627 
+  800000     9250      219      127    405.98268       17    19.904618 
+  820000     9250      223      128     410.5823       21    19.904868 
+  840000     9250      225      139    424.61988       20    19.904261 
+  860000     9250      229      138    414.82143       12    19.903502 
+  880000     9250      230      133    402.15864       29    19.903252 
+  900000     9250      229      140    433.99516       16    19.901693 
+  920000     9250      226      132    439.07435       20    19.901536 
+  940000     9250      225      140    429.77742       14    19.902082 
+  960000     9250      222      121    389.38852       25    19.902236 
+  980000     9250      229      144    404.73018       23    19.902073 
+ 1000000     9250      227      142     425.4007       23    19.902443 
+Loop time of 217.276 on 2 procs for 1000000 steps with 9250 particles
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 59.441     | 60.439     | 61.436     |  12.8 | 27.82
+Coll    | 34.306     | 36.257     | 38.209     |  32.4 | 16.69
+Sort    | 8.5105     | 8.5346     | 8.5586     |   0.8 |  3.93
+Comm    | 21.864     | 22.128     | 22.393     |   5.6 | 10.18
+Modify  | 53.431     | 54.4       | 55.369     |  13.1 | 25.04
+Output  | 0.13961    | 0.14153    | 0.14345    |   0.5 |  0.07
+Other   |            | 35.38      |            |       | 16.28
+
+Particle moves    = 9250000000 (9.25B)
+Cells touched     = 10222861610 (10.2B)
+Particle comms    = 19827050 (19.8M)
+Boundary collides = 19902443 (19.9M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 225314130 (225M)
+Collide occurs    = 135561512 (136M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 2.12863e+07
+Particle-moves/step: 9250
+Cell-touches/particle/step: 1.10517
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.00214346
+Particle fraction colliding with boundary: 0.00215162
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.0243583
+Collisions/particle/step: 0.0146553
+Reactions/particle/step: 0
+
+Particles: 4625 ave 4839 max 4411 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Cells:      25 ave 25 max 25 min
+Histogram: 2 0 0 0 0 0 0 0 0 0
+GhostCell: 2 ave 2 max 2 min
+Histogram: 2 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 2 0 0 0 0 0 0 0 0 0

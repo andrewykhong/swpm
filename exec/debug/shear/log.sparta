@@ -1,0 +1,301 @@
+SPARTA (18 Jul 2022)
+Running on 1 MPI task(s)
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+
+#seed               34670
+seed               12456
+dimension          3
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.4
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 298.15
+variable p         equal 101325.0
+variable Ma        equal 0.2
+variable ppc       equal 64.0
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 5.0e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable R_ref     equal 1.380658e-23/${mass_ref}
+variable R_ref     equal 1.380658e-23/5e-26
+variable RT        equal ${R_ref}*${T}
+variable RT        equal 276.1316*${T}
+variable RT        equal 276.1316*298.15
+variable rho       equal ${p}/${RT}
+variable rho       equal 101325/${RT}
+variable rho       equal 101325/82328.63654
+variable nden      equal ${rho}/${mass_ref}
+variable nden      equal 1.2307382249768/${mass_ref}
+variable nden      equal 1.2307382249768/5e-26
+variable mu_ref    equal 2.0e-5
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-05/${p}*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-05/101325*sqrt(${pi}*${RT}*0.5)
+variable lam       equal 2e-05/101325*sqrt(3.14159*${RT}*0.5)
+variable lam       equal 2e-05/101325*sqrt(3.14159*82328.63654*0.5)
+variable cbar      equal sqrt(2.*${RT})
+variable cbar      equal sqrt(2.*82328.63654)
+variable a         equal sqrt(${gamma}*${RT})
+variable a         equal sqrt(1.4*${RT})
+variable a         equal sqrt(1.4*82328.63654)
+variable vb        equal 20.0
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar vstream ${vb} 0.0 0.0 temp ${T}
+mixture            air Ar vstream 20 0.0 0.0 temp ${T}
+mixture            air Ar vstream 20 0.0 0.0 temp 298.15
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+collide_modify     remain no
+
+# 4 arguments "swpm" yes/no Nmin Ggamma
+# groups with  "ngrp" particles or less are eligible to merge
+collide_modify    swpm yes 64.0 1.0
+
+# RW/LGZ Nmax Ngrp
+# Nmax is the max number of particles before reduction
+# Ngrp is the minimum number per group
+#collide_modify    ENRGY 128.0 4.0
+collide_modify    RW 128.0 4.0
+#collide_modify   LGZ 128.0 12.0
+
+collide_modify    position dev # picks from old positions to best preserve CoM
+#collide_modify   position mean # can be unstable at times
+#collide_modify   position rnd # default
+
+collide_modify    minsplit -1.0
+
+# Gono Nmax Ngrp Nr x2 v2 v3
+# default has 10 constraints
+# how many particles to reduce to (must be larger than number of contraints)
+# x2 is flag to conserve second spatial moment (>0 is yes; otherwise no) [3]
+# v2 is flag to conserve mixed velocity moments (off-diag in stress tensor) [3]
+# v3 is flag to conserve third velocity moment (for heat flux) [3]
+#collide_modify   GONO 128.0 40.0 20.0 0 0 0
+#collide_modify   GONO 128.0 40.0 20.0 1 0 0
+#collide_modify   GONO 128.0 40.0 20.0 0 1 0
+#collide_modify   GONO 128.0 40.0 20.0 0 1 1
+#collide_modify   GONO 128.0 40.0 20.0 1 1 0
+#collide_modify   GONO 128.0 40.0 20.0 1 1 1
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 1.0e-5
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 125
+variable nz        equal 1
+
+boundary           p s p
+
+create_box         0.0 ${Lx} 0.0 ${Ly} 0.0 ${Lz}
+create_box         0.0 0.0001 0.0 ${Ly} 0.0 ${Lz}
+create_box         0.0 0.0001 0.0 1e-05 0.0 ${Lz}
+create_box         0.0 0.0001 0.0 1e-05 0.0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 1e-05 0.0001)
+create_grid        ${nx} ${ny} ${nz} block * * *
+create_grid        1 ${ny} ${nz} block * * *
+create_grid        1 125 ${nz} block * * *
+create_grid        1 125 1 block * * *
+Created 125 child grid cells
+  CPU time = 0.0010421 secs
+  create/ghost percent = 89.9673 10.0327
+balance_grid       rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.000961404 secs
+  reassign/sort/migrate/ghost percent = 37.861 0.0603284 34.1999 27.8788
+
+surf_collide       1 diffuse 300 1.0 translate 0.0 0.0 0.0
+surf_collide       2 diffuse 300 1.0 translate ${vb} 0.0 0.0
+surf_collide       2 diffuse 300 1.0 translate 20 0.0 0.0
+
+bound_modify       ylo collide 1
+bound_modify       yhi collide 2
+
+variable N         equal ${ny}*${ppc}
+variable N         equal 125*${ppc}
+variable N         equal 125*64
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4614764499536e+25/(${N}/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4614764499536e+25/(8000/(${Lx}*${Ly}*${Lz}))
+variable Fnum      equal 2.4614764499536e+25/(8000/(0.0001*${Ly}*${Lz}))
+variable Fnum      equal 2.4614764499536e+25/(8000/(0.0001*1e-05*${Lz}))
+variable Fnum      equal 2.4614764499536e+25/(8000/(0.0001*1e-05*0.0001))
+
+global nrho ${nden}
+global nrho 2.4614764499536e+25
+global fnum ${Fnum}
+global fnum 307684556.2442
+
+variable y         internal 0.0
+variable vx        equal "(1-(yhi-v_y)/(yhi-ylo))*v_vb"
+create_particles   air n ${N} velocity vx NULL NULL NULL y NULL
+create_particles   air n 8000 velocity vx NULL NULL NULL y NULL
+Created 8000 particles
+  CPU time = 0.0262376 secs
+#create_particles   air n ${N}
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable td        equal 1.2307382249768*${Ly}*${Ly}/${mu_ref}
+variable td        equal 1.2307382249768*1e-05*${Ly}/${mu_ref}
+variable td        equal 1.2307382249768*1e-05*1e-05/${mu_ref}
+variable td        equal 1.2307382249768*1e-05*1e-05/2e-05
+variable dy        equal ${Ly}/${ny}
+variable dy        equal 1e-05/${ny}
+variable dy        equal 1e-05/125
+variable dyolam    equal ${dy}/${lam}
+variable dyolam    equal 8e-08/${lam}
+variable dyolam    equal 8e-08/7.09820601360159e-08
+variable dt        equal 4.0e-12
+variable Nsteady   equal ceil(${td}/${dt})*5.0
+variable Nsteady   equal ceil(6.153691124884e-06/${dt})*5.0
+variable Nsteady   equal ceil(6.153691124884e-06/4e-12)*5.0
+variable tsteady   equal ${Nsteady}*${dt}
+variable tsteady   equal 7692115*${dt}
+variable tsteady   equal 7692115*4e-12
+variable Kn_g      equal ${lam}/${Ly}
+variable Kn_g      equal 7.09820601360159e-08/${Ly}
+variable Kn_g      equal 7.09820601360159e-08/1e-05
+
+#####################################
+# Print variable values to log file #
+#####################################
+print " Boundary velocity = ${vb}"
+ Boundary velocity = 20
+print " Most probable speed = ${cbar}"
+ Most probable speed = 405.779833259367
+print " Mean free path = ${lam}"
+ Mean free path = 7.09820601360159e-08
+print " Kn_system = ${Kn_g}"
+ Kn_system = 0.00709820601360159
+print " dy/lam = ${dyolam}"
+ dy/lam = 1.12704533859265
+print " Time step=${dt}"
+ Time step=4e-12
+print " Diffusion time in dt=${Nsteady}"
+ Diffusion time in dt=7692115
+
+###########
+# Outputs #
+###########
+compute state      thermal/grid/sw all all temp press
+compute rho        grid/sw all all n nrho
+compute vel        grid/sw all all u v coruy
+compute mom        pflux/grid/sw all all momxx momyy momzz momxy
+compute q          eflux/grid/sw all all heatx heaty heatz
+
+#############
+# Transient #
+#############
+stats              1000
+stats_style        step np nattempt ncoll nbound nboundave
+
+timestep           ${dt}
+timestep           4e-12
+run                500000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.8125 1.8125 1.8125
+  grid      (ave,min,max) = 1.57629 1.57629 1.57629
+  surf      (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.42217 3.42217 3.42217
+Step Np Natt Ncoll Nbound Nboundave 
+       0     8000        0        0        0            0 
+    1000    13736     1080      568        0        1.114 
+    2000    13774     1102      586        3        1.133 
+    3000    13720     1121      541        0    1.1413333 
+    4000    13435     1114      518        2       1.1415 
+    5000    13686     1124      564        0       1.1342 
+    6000    13787     1123      549        1    1.1318333 
+    7000    13799     1155      557        0    1.1248571 
+    8000    13895     1126      528        1        1.125 
+    9000    14057     1149      575        1    1.1253333 
+   10000    13692     1142      547        2       1.1311 
+   11000    14023     1139      540        1    1.1312727 
+   12000    13739     1124      536        0        1.132 
+   13000    13741     1135      531        0    1.1397692 
+   14000    13808     1153      547        1    1.1402857 
+   15000    13772     1163      566        0       1.1424 
+   16000    14004     1165      536        2    1.1431875 
+   17000    13953     1178      515        2    1.1432353 
+   18000    13812     1162      534        0    1.1406667 
+   19000    13792     1142      535        2    1.1415789 
+   20000    13973     1155      557        0       1.1381 
+   21000    13793     1163      537        1    1.1378571 
+   22000    13817     1179      542        2    1.1389545 
+   23000    13700     1175      520        0    1.1404783 
+   24000    13808     1169      556        2    1.1422917 
+   25000    13685     1142      563        0      1.14112 
+   26000    13953     1177      558        2    1.1389231 
+   27000    13761     1174      537        0    1.1386667 
+   28000    13893     1170      585        2    1.1360714 
+   29000    13630     1185      546        1    1.1361034 
+   30000    13876     1148      539        0    1.1376333 
+   31000    13646     1167      526        1    1.1384194 
+   32000    13922     1178      567        1       1.1395 
+   33000    13985     1192      564        1    1.1400909 
+   34000    13834     1170      556        1    1.1399118 
+   35000    13733     1170      538        2    1.1401429 
+   36000    14001     1197      546        1    1.1403611 
+   37000    13681     1168      545        1    1.1397027 
+   38000    13988     1220      550        2    1.1401579 
+   39000    13672     1175      529        0     1.140641 
+   40000    13730     1200      554        1       1.1408 
+   41000    14088     1209      585        2    1.1411951 
+   42000    13710     1191      570        0    1.1413571 
+   43000    13708     1180      543        1    1.1419535 
+   44000    13724     1187      501        0    1.1431136 
+   45000    13555     1190      560        2    1.1429111 
+   46000    13856     1184      544        1    1.1431957 
+   47000    13724     1173      494        1     1.143766 
+   48000    13714     1176      549        0    1.1454583 
+   49000    13626     1194      564        0    1.1464286 
+   50000    13863     1187      542        1      1.14742 
+   51000    13554     1180      542        4    1.1485098 
+   52000    13793     1192      535        0    1.1476346 
+   53000    13609     1198      545        2    1.1470377 
+   54000    13709     1192      523        1    1.1474074 
+   55000    13897     1194      549        0    1.1464364 
+   56000    13814     1176      545        1    1.1455357 
+   57000    13973     1196      555        1    1.1459825 
+   58000    13784     1203      543        1    1.1461034 
+   59000    13619     1182      538        0    1.1451864 
+   60000    13849     1184      541        6    1.1453833 
+   61000    13920     1212      570        2    1.1455902 
+   62000    13918     1180      567        0    1.1451774 
+   63000    13890     1211      500        1    1.1454127 
+   64000    13791     1185      568        0      1.14475 
+   65000    13930     1204      568        1    1.1446462 
+   66000    13671     1171      565        0    1.1449848 
+   67000    13949     1206      553        0    1.1451791 
+   68000    13880     1196      569        2       1.1445 
+   69000    13779     1196      545        0    1.1453188 
+   70000    13944     1202      565        1    1.1456714 
+   71000    14129     1213      554        1   

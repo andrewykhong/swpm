@@ -1,0 +1,26 @@
+#!/bin/csh -f
+
+#SBATCH --nodes=8
+#SBATCH --time=4:00:00
+#SBATCH --account=fy150035
+#SBATCH --license=gpfs
+#SBATCH --partition=short,batch
+#SBATCH --job-name=D/N2Ar/gop/c2
+##SBATCH --mail-user=ayhong@sandia.gov
+##SBATCH --mail-type=ALL
+
+set nodes=$SLURM_JOB_NUM_NODES
+
+# processors per node
+# can check by sinfo --Node --long
+set cores=48
+@ ncpus=$nodes * $cores
+
+# Avoids error message at runtime about TMPDIR
+setenv TMPDIR /tmp/$SLURM_JOB_ID
+
+cd /pscratch/ayhong/sparta/exec/fick/N2Ar/gop/c2/
+
+mpiexec --bind-to core --np $ncpus  /pscratch/ayhong/sparta/src/spa_mpi < in.fick &
+
+wait

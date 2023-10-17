@@ -1,0 +1,143 @@
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+
+seed               5127
+dimension          3
+global             gridcut 1.0e-8 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.4
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 300.0
+variable p         equal 101325.00
+variable Ma        equal 0.2
+variable ppc       equal 185
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 5.0e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable RT        equal ${R_ref}*${T}
+variable rho       equal ${p}/${RT}
+variable nden      equal ${rho}/${mass_ref}
+variable mu_ref    equal 2.0e-9
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT}*0.5)
+variable cbar      equal sqrt(2.*${RT})
+variable a         equal sqrt(${gamma}*${RT})
+variable vb        equal 0.0
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar vstream 0 0 0  temp ${T}
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+collide_modify     remain no
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 4.0e-7
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 50
+variable nz        equal 1
+
+boundary           p s p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_grid        ${nx} ${ny} ${nz} block * * * 
+balance_grid       rcb part
+
+surf_collide       1 diffuse 300 1.0 translate ${vb}  0.0 0.0
+surf_collide       2 diffuse 400 1.0 translate -${vb} 0.0 0.0
+
+bound_modify       ylo collide 1
+bound_modify       yhi collide 2
+
+variable N         equal ${ny}*${nx}*${nz}*${ppc}
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+
+global nrho ${nden}
+global fnum ${Fnum}
+
+variable y         internal 0.0
+variable t         equal "1.0 + (100/300)*(v_y-xlo)/(xhi-xlo)"
+
+create_particles   air n ${N} temperature t NULL y NULL
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable dy        equal ${Ly}/${ny}
+variable dyolam    equal ${dy}/${lam}
+variable dt        equal 4.0e-12
+variable Nsteady   equal ceil(${td}/${dt})*5.0
+variable tsteady   equal ${Nsteady}*${dt}
+variable Kn_g      equal ${lam}/${Ly}
+
+#####################################
+# Print variable values to log file #
+##################################### 
+print " Boundary velocity = ${vb}"
+print " Most probable speed = ${cbar}" 
+print " Mean free path = ${lam}"
+print " Kn_system = ${Kn_g}"
+print " dy/lam = ${dyolam}"
+print " Time step=${dt}"
+print " Diffusion time in dt=${Nsteady}"
+
+###########
+# Outputs #
+###########
+compute state_sw      thermal/grid/sw all all temp press
+compute corv          grid/sw all all coruy corvy
+compute rho_sw        grid/sw all all n
+compute vel_sw        grid/sw all all v
+compute mom_sw        pflux/grid/sw all all momxx momyy momzz momxy momyz momxz
+compute q_sw          eflux/grid/sw all all heaty
+compute cnt_sw        grid/sw all all n
+
+#############
+# Transient #
+#############
+compute 1T reduce max c_state_sw[1]
+
+stats              20000
+stats_style        step np nattempt ncoll c_1T nbound nboundave
+
+timestep           ${dt}
+run               100000
+
+##########
+# Steady #
+##########
+reset_timestep 0
+fix 1a            ave/grid all 5 200 1000 c_state_sw[*] c_vel_sw[*] ave running
+fix 1b            ave/grid all 5 200 1000 c_rho_sw[*] ave running
+fix 1c            ave/grid all 5 200 1000 c_q_sw[*] ave running
+fix 1d            ave/grid all 5 200 1000 c_corv[*] ave running
+dump 1            grid all 1000000 out_dsmc.* yc f_1a[*] f_1b[*] f_1c[*] f_1d[*]
+
+timestep           ${dt}
+run               1000000

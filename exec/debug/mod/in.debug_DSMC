@@ -1,0 +1,48 @@
+###################################
+# Simulation parameters
+###################################
+seed	    	    8383848
+dimension   	    3
+global		    nrho 1.0e20
+global              fnum 2.0e10
+timestep            2.0e-9
+
+###################################
+# Grid generation
+###################################
+boundary	    p p p
+create_box          -0.001 0.001 -0.001 0.001 -0.001 0.001
+create_grid 	    2 2 2 block * * * 
+
+balance_grid        rcb part
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+species             xe.species Xe 
+
+mixture             all vstream 0.0 0.0  0.0 temp 300
+collide		    vss all xe.vss
+mixture             all Xe frac 1.000
+
+collide_modify      vremax 100000 no vibrate no rotate no nearcp yes 100
+
+###################################
+# Initialize simulation
+###################################
+variable x internal 0
+variable y internal 0
+variable z internal 0
+
+create_particles all n 200
+
+###################################
+# Unsteady Output
+###################################
+compute             1 property/grid all xc yc mod
+fix                 1 ave/grid all 1 200 200 c_1[*] ave one
+
+dump                1 grid all 200 tmp_flow.* id xc yc f_1[*] 
+
+stats_style         step cpu np nattempt ncoll maxlevel
+stats               100
+run                 1000

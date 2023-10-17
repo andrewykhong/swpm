@@ -1,0 +1,130 @@
+################################################################################
+# 2D Fick flow
+################################################################################
+
+seed               27182
+dimension          3
+global             gridcut 5.0e-7 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+#########################
+# Gas parameters for Ar #
+#########################
+variable mu_ref    equal 2.117E-5
+variable mass_ref  equal 5.00E-26
+variable gamma     equal 5./3. # ratio of specific heats
+variable R_ref     equal ${kb}/${mass_ref}
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 273.15
+variable p         equal 101325.0
+variable ppc       equal 100
+
+################
+# Precalculate #
+################
+variable RT        equal ${R_ref}*${T}
+variable rho       equal ${p}/${RT}
+variable nden      equal ${rho}/${mass_ref}
+variable lam       equal ${mu_ref}/${p}*sqrt(${pi}*${RT})
+variable cbar      equal sqrt(2.*${RT})
+
+################################
+# Species Collide + Parameters #
+################################
+
+species            air.species He O2
+
+mixture            air He O2 temp ${T} group SELF
+mixture            air He frac 0.5
+mixture            air O2 frac 0.5
+
+collide            vss air opt.vss 
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 4.0e-5
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 5000
+variable nz        equal 1
+
+boundary           p s p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_grid        ${nx} ${ny} ${nz} block * * * 
+balance_grid       rcb part
+
+surf_collide       bot diffuse ${T} 1.0
+surf_collide       top diffuse ${T} 1.0
+
+surf_react         bot prob airL.surf
+surf_react         top prob airR.surf
+
+bound_modify       ylo collide bot react bot
+bound_modify       yhi collide top react top
+
+variable N         equal ${ny}*${ppc}
+variable Fnum      equal ${nden}*${Lx}*${Ly}*${Lz}/(${ppc}*${nx}*${ny}*${nz})
+
+global             nrho ${nden}
+global             fnum ${Fnum}
+
+create_particles   air n ${N}
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
+variable dy        equal ${Ly}/${ny}
+variable dyolam    equal ${dy}/${lam}
+variable dt        equal 3.0e-12
+variable Kn_g      equal ${lam}/${Ly}
+
+#####################################
+# Print variable values to log file #
+##################################### 
+print " Most probable speed = ${cbar}" 
+print " Num Density  = ${nden}"
+print " Mean free path = ${lam}"
+print " Kn_system = ${Kn_g}"
+print " dy/lam = ${dyolam}"
+print " Time step=${dt}"
+
+###########
+# Outputs #
+###########
+compute rho        grid all species nrho
+compute vel        grid all species v
+
+#############
+# Transient #
+#############
+stats              100000
+stats_style        step np nattempt ncoll
+
+timestep           ${dt}
+run                50000000
+
+#################
+# Collect Stats #
+#################
+reset_timestep     0
+
+fix rho            ave/grid all 5 2000 10000 c_rho[*]    ave running
+fix vel            ave/grid all 5 2000 10000 c_vel[*]    ave running
+
+dump state         grid all 50000000 state.* id yc f_rho[*]
+dump vel           grid all 50000000 vel.*   id yc f_vel[*]
+
+run                50000000

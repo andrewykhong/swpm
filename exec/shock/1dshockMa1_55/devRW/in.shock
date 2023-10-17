@@ -1,0 +1,184 @@
+################################################################################
+# Validation against Alsmeyer Experiments
+################################################################################
+seed               34670
+dimension          3
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+############################
+# Pre-Shock Gas parameters #
+############################
+variable gamma     equal 5.0/3.0
+variable mass      equal 66.3e-27
+variable mu        equal 2.27e-5
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 300.0
+variable p         equal 6.66612
+variable Ma        equal 1.55
+variable ppc       equal 2000.0
+
+#################################
+# Precalculate Pre Shock Values #
+#################################
+variable R         equal ${kb}/${mass}
+variable RT        equal ${R}*${T}
+variable rho       equal ${p}/${RT}
+variable nden      equal ${rho}/${mass}
+variable lam       equal ${mu}/${p}*sqrt(${pi}*${RT}*0.5)
+variable cbar      equal sqrt(2.0*${RT})
+variable a         equal sqrt(${gamma}*${RT})
+variable v         equal ${Ma}*${a}
+
+###########################
+# Print precompute values #
+###########################
+print " Number Density = ${nden}"
+print " Shock speed = ${v}"
+print " Speed of Sound = ${a}" 
+print " Mean free path = ${lam}"
+
+##################################
+# Precalculate Post Shock Values #
+##################################
+# Rankine-Hugoniot
+variable u2u1      equal (2.0+(${gamma}-1.0)*${Ma}^2)/((${gamma}+1.0)*${Ma}^2) 
+variable p2p1      equal (2.0*${gamma}*${Ma}^2-(${gamma}-1.0))/(${gamma}+1.0)
+variable r2r1      equal 1.0/${u2u1}
+variable v2        equal ${v}*${u2u1}
+variable Trat      equal ${p2p1}*${u2u1}
+variable nrat      equal ${r2r1}
+
+###########################
+# Print precompute values #
+###########################
+print " Piston Speed = ${v2}" 
+variable T2      equal ${T}*${Trat}
+print " Trat = ${Trat}"
+print " T2 = ${T2}"
+variable n2      equal ${nden}*${nrat}
+print " nrat = ${nrat}"
+print " n2 = ${n2}"
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar nrho ${nden} vstream ${v} 0.0 0.0 temp ${T}
+mixture            air Ar frac 1.0
+
+collide            vss air opt.vss
+collide_modify     swpm yes -1.0 1.0
+collide_modify     RW 6000.0 4.0
+collide_modify     position dev # picks from old positions to best preserve CoM
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 10*${lam}
+variable Ly        equal ${lam}
+variable Lz        equal ${lam}
+
+variable nx        equal 240
+variable ny        equal 1
+variable nz        equal 1
+
+boundary           os p p
+
+create_box         -${Lx} ${Lx} -${Ly} ${Ly} -${Lz} ${Lz}
+create_grid        ${nx} 1 1 block * * * 
+balance_grid       rcb part
+
+surf_collide       pstn piston ${v2}
+bound_modify       xhi collide pstn
+fix                in emit/face air xlo
+
+#######################
+# Initialize Particles#
+#######################
+variable N         equal ${nx}*${ppc}
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}*6))
+global nrho ${nden}
+global fnum ${Fnum}
+
+variable x internal 1
+variable y internal 1
+variable z internal 1
+
+variable spos      equal 0.0 
+variable vx        equal "(v_x < v_spos)*v_v + (v_x > v_spos)*v_v2"
+variable n         equal "(v_x < v_spos) + (v_x > v_spos)*v_nrat"
+variable t         equal "(v_x < v_spos) + (v_x > v_spos)*v_Trat"
+
+create_particles   air n 0 velocity vx NULL NULL x y z density n x y z temperature t x y z
+
+#####################
+# More Precalculate #
+#####################
+variable td        equal ${rho}*${Lx}*${Lx}/${mu}
+variable dx        equal 2.0*${Lx}/${nx}
+variable vfly      equal ${dx}/(${v2}+${cbar})
+variable dt        equal 1.0e-8
+variable Nsteady   equal ceil(${td}/${dt})
+
+#####################################
+# Print variable values to log file #
+##################################### 
+print " Fn = ${Fnum}"
+print " dx = ${dx}"
+print " Cell Cross Time=${vfly}"
+print " Time step=${dt}"
+print " Diffusion time in dt=${Nsteady}"
+
+###########
+# Outputs #
+###########
+compute state      thermal/grid/sw all all temp press
+compute rho        grid/sw all all n nrho
+compute vel        grid/sw all all u v w
+
+#############
+# Transient #
+#############
+stats              100
+stats_style        step np nattempt ncoll nbound nboundave
+
+fix                load balance 1000 1.1 rcb time
+
+fix state          ave/grid all 5 200 1000 c_state[*]  ave one
+fix rho            ave/grid all 5 200 1000 c_rho[*]    ave one
+fix vel            ave/grid all 5 200 1000 c_vel[*]    ave one
+
+dump state         grid all 5000 tmp_state.* xc f_rho[*] f_state[*]
+dump mom           grid all 5000 tmp_vel.*  xc f_vel[*]
+
+timestep           ${dt}
+run                200000
+
+#################
+# Collect Stats #
+#################
+unfix state
+unfix rho
+unfix vel
+unfix load
+undump state
+undump mom
+
+fix state          ave/grid all 5 200 1000 c_state[*]  ave running
+fix rho            ave/grid all 5 200 1000 c_rho[*]    ave running
+fix vel            ave/grid all 5 200 1000 c_vel[*]    ave running
+
+dump state         grid all 50000 std_state.* xc f_rho[*] f_state[*]
+dump mom           grid all 50000 std_vel.*  xc f_vel[*]
+
+collide_modify     vremax 0 no
+run                500000
