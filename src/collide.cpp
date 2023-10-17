@@ -555,11 +555,10 @@ void Collide::collisions()
   // variant for stochastic weights
   if (swpmflag) {
     collisions_one_sw<0>(); // nearest neighbor not currently supported
-    //if(Nmax > 0) {
-    //  if(reduceMinFlag < 0) sw_reduce();
-    //  else sw_reduce_dev();
-    //}
-    sw_reduce();
+    if(Nmax > 0) {
+      if(reduceMinFlag < 0) sw_reduce();
+      else sw_reduce_dev();
+    }
   } else if (!ambiflag) {
     if (nearcp == 0) {
       if (ngroups == 1) collisions_one<0>();
@@ -1234,17 +1233,25 @@ void Collide::sw_reduce()
     }
     if (n <= Nmax) continue;
 
-    //double Abuf = 2.0;
+    double Abuf = 2.0;
     while(n > Nmax) {
       // create particle list
       ip = cinfo[icell].first;
       n = 0;
+      double gmean = 0.0;
       while (ip >= 0) {
         ipart = &particles[ip];
+        double g = ipart->sw;
+
         // remove negative weight particles from plist
-        if(ipart->sw > 0) plist[n++] = ip;
+        if(g > 0) {
+          plist[n++] = ip;
+          double d1 = g - gmean;
+          gmean += (d1/m);
+        }
         ip = next[ip];
       }
+      gthresh = Abuf*gmean*npThresh;
 
       // reduce more if the number of particles is still too many
       // AND if the reduction is still reducing
@@ -1254,6 +1261,12 @@ void Collide::sw_reduce()
       n -= dnRed;
 
       cinfo[icell].ndel += dnRed;
+
+      // if none reduced, increase weight threshold
+      // if too big, break
+      // should have to use this scarcely
+      if(dnRed == 0) Abuf += 1.0;
+      if(Abuf > 10) break;
     }
     //redFlag = 1;
   }// loop for cells
@@ -1347,8 +1360,11 @@ void Collide::sw_reduce_dev()
       n -= dnRed;
       cinfo[icell].ndel += dnRed;
 
-      // if none reduced, break
-      if(dnRed == 0) break;
+      // if none reduced, increase weight threshold
+      // if too big, break
+      // should have to use this scarcely
+      if(dnRed == 0) Abuf += 1.0;
+      if(Abuf > 10) break;
     }
     //redFlag = 1;
   }// loop for cells
@@ -2686,7 +2702,7 @@ void Collide::divideMerge(int *node_pid, int np)
 
 /*------------------------------------------------------------------------ */
 
-  if(np <= npmx) { // npmx is now the maximum number of particles in a group
+  if(np <= npmx && gsum < gthresh) { // npmx is now the maximum number of particles in a group
     npCluster = np;
     for(int i = 0; i < np; i++) currentCluster[i] = node_pid[i];
 
