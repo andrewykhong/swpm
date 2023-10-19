@@ -2864,7 +2864,7 @@ void Collide::merge()
       // carry over CoM difference
       double dgX[3];
       dgX[0] = dgX[1] = dgX[2] = 0.0;
-      //for(int d = 0; d < 3; d++) dgX[d] = xmr[d];
+      for(int d = 0; d < 3; d++) dgX[d] = xmr[d];
 
       double mxmag = 0.0;
       double dxmag = 0.0;
@@ -2887,7 +2887,7 @@ void Collide::merge()
       }
 
       // store difference in center of mass for next iteration
-      //for(int d = 0; d < 3; d++) xmr[d] = mxm[d];      
+      for(int d = 0; d < 3; d++) xmr[d] = mxm[d];      
 
       ipart = &particles[currentCluster[ip]];
       jpart = &particles[currentCluster[jp]];

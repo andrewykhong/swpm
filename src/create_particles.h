@@ -60,6 +60,9 @@ class CreateParticles : protected Pointers {
   double temperature_variable(double *);
   void velocity_variable(double *, double *, double *);
   int outside_region(int, double *, double *);
+
+  int BKWflag;
+  double beta0;
 };
 
 }

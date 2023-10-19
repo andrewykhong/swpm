@@ -94,6 +94,7 @@ void CreateParticles::command(int narg, char **arg)
   dstr = dxstr = dystr = dzstr = NULL;
   tstr = txstr = tystr = tzstr = NULL;
   vxstr = vystr = vzstr = vstrx = vstry = vstrz = NULL;
+  BKWflag = 0;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"global") == 0) {
@@ -162,6 +163,12 @@ void CreateParticles::command(int narg, char **arg)
       if (iarg+1 > narg) error->all(FLERR,"Illegal create_particles command");
       twopass = 1;
       iarg += 1;
+    } else if (strcmp(arg[iarg],"BKW") == 0) {
+      if (iarg+3 > narg) error->all(FLERR,"Illegal create_particles command");
+      if (strcmp(arg[iarg+1],"no") == 0) BKWflag = 0;
+      else if (strcmp(arg[iarg+1],"yes") == 0) BKWflag = 1;
+      beta0 = atof(arg[iarg+2]);
+      iarg += 3;
     } else error->all(FLERR,"Illegal create_particles command");
   }
 
@@ -543,6 +550,10 @@ void CreateParticles::create_local(bigint np)
   double volsum = 0.0;
   bigint nprev = 0;
 
+  // TEMP
+  double vx4 = 0.0;
+  int Np = 0;
+
   for (int i = 0; i < nglocal; i++) {
     if (cinfo[i].type != OUTSIDE) continue;
     lo = cells[i].lo;
@@ -593,21 +604,64 @@ void CreateParticles::create_local(bigint np)
         sqrttempscale = sqrt(tempscale);
       }
 
-      vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
-      vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
-      theta1 = MY_2PI * random->uniform();
-      theta2 = MY_2PI * random->uniform();
+      if(BKWflag) {
+        // sample from initial BKW solution
+        double m2kT = 1.0/(vscale[isp]*vscale[isp]); // m / 2kT
+        double A = m2kT*(1.0+beta0);
+        double vm = 3.0*sqrt(2.0/m2kT);
+        //double cpv2 = pow(A/MY_PI,1.5);
+        double vs = (2.0*random->uniform()-1.0)*vm;
+        //double pv2 = cpv2*exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+        double pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
 
-      if (velflag) {
-        velocity_variable(x,vstream,vstream_variable);
-        v[0] = vstream_variable[0] + vn*cos(theta1);
-        v[1] = vstream_variable[1] + vr*cos(theta2);
-        v[2] = vstream_variable[2] + vr*sin(theta2);
+        double vs2mx = (1.0-0.5*beta0)/(m2kT*beta0*(1.0+beta0));
+        //double pmx = cpv2*exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
+        double pmx = exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
+
+        /*while(true) {
+          if(pmx < pv2) error->one(FLERR,"not bounded");
+          vs = random->uniform()*vm;
+          pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+          if(pmx*random->uniform() < pv2) break;
+        }
+
+        double theta = MY_2PI * random->uniform();
+        double cosphi = 2.0 * random->uniform() - 1.0;
+        double sinphi = sqrt(1.0 - cosphi*cosphi);
+        
+        v[0] = vs*sinphi*cos(theta);
+        v[1] = vs*sinphi*sin(theta);
+        v[2] = vs*cosphi;*/
+
+        for(int i = 0; i < 3; i++) {
+          while(true) {
+            vs = (2.0*random->uniform()-1.0)*vm;
+            pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+            if(pmx < pv2) error->one(FLERR,"not bounded");
+            if(pmx*random->uniform() < pv2) break;
+          }
+          v[i] = vs;
+        }
+
       } else {
-        v[0] = vstream[0] + vn*cos(theta1);
-        v[1] = vstream[1] + vr*cos(theta2);
-        v[2] = vstream[2] + vr*sin(theta2);
+        vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
+        vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
+        theta1 = MY_2PI * random->uniform();
+        theta2 = MY_2PI * random->uniform();
+        if (velflag) {
+          velocity_variable(x,vstream,vstream_variable);
+          v[0] = vstream_variable[0] + vn*cos(theta1);
+          v[1] = vstream_variable[1] + vr*cos(theta2);
+          v[2] = vstream_variable[2] + vr*sin(theta2);
+        } else {
+          v[0] = vstream[0] + vn*cos(theta1);
+          v[1] = vstream[1] + vr*cos(theta2);
+          v[2] = vstream[2] + vr*sin(theta2);
+        }
       }
+
+      vx4 += (v[0]*v[0]*v[0]*v[0]);
+      Np++;
 
       erot = particle->erot(ispecies,temp_rot*tempscale,random);
       evib = particle->evib(ispecies,temp_vib*tempscale,random);
@@ -626,7 +680,7 @@ void CreateParticles::create_local(bigint np)
 
     nprev += npercell;
   }
-
+  printf("v4/np: %4.3e\n", vx4/Np);
   delete random;
 }
 
@@ -800,20 +854,48 @@ void CreateParticles::create_local_twopass(bigint np)
         sqrttempscale = sqrt(tempscale);
       }
 
-      vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
-      vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
-      theta1 = MY_2PI * random->uniform();
-      theta2 = MY_2PI * random->uniform();
+      if(BKWflag) {
+        // sample from initial BKW solution
+        double m2kT = 1.0/(vscale[isp]*vscale[isp]); // m / 2kT
+        double A = m2kT*(1.0+beta0);
+        double vm = 3.0*sqrt(2.0/m2kT);
+        double cpv2 = pow(A/MY_PI,1.5);
+        double vs = random->uniform()*vm;
+        //double pv2 = cpv2*exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+        double pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
 
-      if (velflag) {
-        velocity_variable(x,vstream,vstream_variable);
-        v[0] = vstream_variable[0] + vn*cos(theta1);
-        v[1] = vstream_variable[1] + vr*cos(theta2);
-        v[2] = vstream_variable[2] + vr*sin(theta2);
+        double vs2mx = (1.0-0.5*beta0)/(m2kT*beta0*(1.0+beta0));
+        //double pmx = cpv2*exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
+        double pmx = exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
+
+        while(pmx*random->uniform() > pv2) {
+          if(pmx < pv2) error->one(FLERR,"not bounded");
+          vs = random->uniform()*vm;
+          pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+        }
+
+        double theta = MY_2PI * random->uniform();
+        double cosphi = 2.0 * random->uniform() - 1.0;
+        double sinphi = sqrt(1.0 - cosphi*cosphi);
+        
+        v[0] = vs*sinphi*cos(theta);
+        v[1] = vs*sinphi*sin(theta);
+        v[2] = vs*cosphi;
       } else {
-        v[0] = vstream[0] + vn*cos(theta1);
-        v[1] = vstream[1] + vr*cos(theta2);
-        v[2] = vstream[2] + vr*sin(theta2);
+        vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
+        vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
+        theta1 = MY_2PI * random->uniform();
+        theta2 = MY_2PI * random->uniform();
+        if (velflag) {
+          velocity_variable(x,vstream,vstream_variable);
+          v[0] = vstream_variable[0] + vn*cos(theta1);
+          v[1] = vstream_variable[1] + vr*cos(theta2);
+          v[2] = vstream_variable[2] + vr*sin(theta2);
+        } else {
+          v[0] = vstream[0] + vn*cos(theta1);
+          v[1] = vstream[1] + vr*cos(theta2);
+          v[2] = vstream[2] + vr*sin(theta2);
+        }
       }
 
       erot = particle->erot(ispecies,temp_rot*tempscale,random);

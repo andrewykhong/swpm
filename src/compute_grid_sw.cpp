@@ -27,13 +27,22 @@ using namespace SPARTA_NS;
 
 // user keywords
 
-enum{CORUY,CORVY,CORWY,NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
+enum{CORUY,CORVY,CORWY,
+     MXX, MYY, MZZ, MXY, MXZ, MYZ,
+     MX3, MY3, MZ3, MX4, MY4, MZ4,
+     M1, M2, M3, M4,
+     NUM,NRHO,NFRAC,MASS,MASSRHO,MASSFRAC,
      U,V,W,USQ,VSQ,WSQ,KE,TEMPERATURE,EROT,TROT,EVIB,TVIB,
      PXRHO,PYRHO,PZRHO,KERHO};
 
 // internal accumulators
 
-enum{NP,COUNT,MASSSUM,MVX,MVY,MVZ,MVXSQ,MVYSQ,MVZSQ,MVSQ,
+enum{NP,COUNT,MASSSUM,MVX,MVY,MVZ,
+     MVXSQ,MVYSQ,MVZSQ,MVSQ,
+     MVXVY, MVXVZ, MVYVZ,
+     MVXVSQ, MVYVSQ, MVZVSQ,
+     MVX4, MVY4, MVZ4,
+     MV1, MV2, MV3, MV4,
      ENGROT,ENGVIB,DOFROT,DOFVIB,CELLCOUNT,CELLMASS,UY,VY,WY,LASTSIZE};
 
 // max # of quantities to accumulate for any user value
@@ -165,6 +174,71 @@ ComputeGridSW::ComputeGridSW(SPARTA *sparta, int narg, char **arg) :
       value[ivalue] = CORWY;
       set_map(ivalue,WY);
       set_map(ivalue,COUNT);
+    // Raw Moments
+    } else if (strcmp(arg[iarg],"MXX") == 0) {
+      value[ivalue] = MXX;
+      set_map(ivalue,MVXSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MYY") == 0) {
+      value[ivalue] = MYY;
+      set_map(ivalue,MVYSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MZZ") == 0) {
+      value[ivalue] = MZZ;
+      set_map(ivalue,MVZSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MXY") == 0) {
+      value[ivalue] = MXY;
+      set_map(ivalue,MVXVY);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MXZ") == 0) {
+      value[ivalue] = MXZ;
+      set_map(ivalue,MVXVZ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MYZ") == 0) {
+      value[ivalue] = MYZ;
+      set_map(ivalue,MVYVZ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MX3") == 0) {
+      value[ivalue] = MX3;
+      set_map(ivalue,MVXVSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MY3") == 0) {
+      value[ivalue] = MY3;
+      set_map(ivalue,MVYVSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MZ3") == 0) {
+      value[ivalue] = MZ3;
+      set_map(ivalue,MVZVSQ);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MX4") == 0) {
+      value[ivalue] = MX4;
+      set_map(ivalue,MVX4);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MY4") == 0) {
+      value[ivalue] = MY4;
+      set_map(ivalue,MVY4);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"MZ4") == 0) {
+      value[ivalue] = MZ4;
+      set_map(ivalue,MVZ4);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"M1") == 0) {
+      value[ivalue] = M1;
+      set_map(ivalue,MV1);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"M2") == 0) {
+      value[ivalue] = M2;
+      set_map(ivalue,MV2);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"M3") == 0) {
+      value[ivalue] = M3;
+      set_map(ivalue,MV3);
+      set_map(ivalue,MASSSUM);
+    } else if (strcmp(arg[iarg],"M4") == 0) {
+      value[ivalue] = M4;
+      set_map(ivalue,MV4);
+      set_map(ivalue,MASSSUM);
     } else error->all(FLERR,"Illegal compute grid command");
 
     ivalue++;
@@ -241,7 +315,7 @@ void ComputeGridSW::compute_per_grid()
   double g;
 
   double ylo, yhi, yp;
-
+  double vpmag, vpsq;
   // zero all accumulators - could do this with memset()
 
   for (i = 0; i < nglocal; i++)
@@ -310,6 +384,60 @@ void ComputeGridSW::compute_per_grid()
       case MVSQ:
         vec[k++] += mass*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])*g;
         break;
+
+      // Raw second moment
+      case MVXVY:
+        vec[k++] += mass*v[0]*v[1]*g;
+        break;
+      case MVXVZ:
+        vec[k++] += mass*v[0]*v[2]*g;
+        break;
+      case MVYVZ:
+        vec[k++] += mass*v[1]*v[2]*g;
+        break;
+      // Raw third moment
+      case MVXVSQ:
+        vec[k++] += mass*v[0]*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])*g;
+        break;
+      case MVYVSQ:
+        vec[k++] += mass*v[1]*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])*g;
+        break;
+      case MVZVSQ:
+        vec[k++] += mass*v[2]*(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])*g;
+        break;
+      // Raw fourth moment
+      case MVX4:
+        vec[k++] += mass*v[0]*v[0]*v[0]*v[0]*g;
+        break;
+      case MVY4:
+        vec[k++] += mass*v[1]*v[1]*v[1]*v[1]*g;
+        break;
+      case MVZ4:
+        vec[k++] += mass*v[2]*v[2]*v[2]*v[2]*g;
+        break;
+
+      // Raw magnitude moments
+      case MV1:
+        vpsq = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+        vpmag = sqrt(vpsq);
+        vec[k++] += mass*vpmag*g;
+        break;
+      case MV2:
+        vpsq = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+        vpmag = sqrt(vpsq);
+        vec[k++] += mass*pow(vpmag,2.0)*g;
+        break;
+      case MV3:
+        vpsq = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+        vpmag = sqrt(vpsq);
+        vec[k++] += mass*pow(vpmag,3.0)*g;
+        break;
+      case MV4:
+        vpsq = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
+        vpmag = sqrt(vpsq);
+        vec[k++] += mass*pow(vpmag,4.0)*g;
+        break;
+
       case ENGROT:
         vec[k++] += particles[i].erot*g;
         break;
@@ -484,6 +612,35 @@ void ComputeGridSW::post_process_grid(int index, int nsample,
         norm = etally[icell][mass];
         if (norm == 0.0) vec[k] = 0.0;
         else vec[k] = etally[icell][velocity] / norm;
+        k += nstride;
+      }
+      break;
+    }
+
+  case MXX:
+  case MYY:
+  case MZZ:
+  case MXY:
+  case MXZ:
+  case MYZ:
+  case MX3:
+  case MY3:
+  case MZ3:
+  case MX4:
+  case MY4:
+  case MZ4:
+  case M1:
+  case M2:
+  case M3:
+  case M4:
+    {
+      double norm;
+      int MN = emap[0];
+      int mass = emap[1];
+      for (int icell = lo; icell < hi; icell++) {
+        norm = etally[icell][mass];
+        if (norm == 0.0) vec[k] = 0.0;
+        else vec[k] = etally[icell][MN] / norm;
         k += nstride;
       }
       break;
