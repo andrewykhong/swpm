@@ -127,9 +127,10 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   currentCluster = NULL;
   npmx = 0;
   rFlag = 0;
-  gthflag = -1;
   npThresh = 0;
   reduceMinFlag = -1;
+  //gthFlag = 1; // always on
+  //npFlag = 1; // always on
 
   // SWPM - Reduction
   memory->create(ipij,3,3,"collide:ipij");
@@ -511,6 +512,18 @@ void Collide::modify_params(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"dev") == 0) rFlag = 3;
       else error->all(FLERR,"Illegal collide_modify command");
       iarg += 2;
+    //} else if (strcmp(arg[iarg],"weightOnly") == 0) {
+    //  if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+    //  if (strcmp(arg[iarg+1],"yes") == 0) npFlag = -1; // turn off np
+    //  else if (strcmp(arg[iarg+1],"no") == 0) npFlag = 1;
+    //  else error->all(FLERR,"Illegal collide_modify command");
+    //  iarg += 2;
+    //} else if (strcmp(arg[iarg],"npOnly") == 0) {
+    //  if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+    //  if (strcmp(arg[iarg+1],"yes") == 0) gthFlag = -1; // turn off weight
+    //  else if (strcmp(arg[iarg+1],"no") == 0) gthFlag = 1;
+    //  else error->all(FLERR,"Illegal collide_modify command");
+    //  iarg += 2;
     } else error->all(FLERR,"Illegal collide_modify command");
   }
 }
@@ -1128,7 +1141,7 @@ template < int NEARCP > void Collide::collisions_one_sw()
       //if (!test_collision_sum(icell,0,0,ipart,jpart)) continue;
       if (!test_collision_max(icell,0,0,ipart,jpart)) continue;
 
-      // if there are too few particles, always split
+      // +2 (split)
       if(gamFlag > 0) {
         perform_split(ipart,jpart,kpart,lpart);
 
@@ -1146,7 +1159,7 @@ template < int NEARCP > void Collide::collisions_one_sw()
         } else {
           perform_collision_sw(ipart,jpart);
         }
-      // too few particles so don't split
+      // +1/0
       } else {
         perform_collision_sw(ipart,jpart,kpart);
         if (kpart) {
@@ -1161,48 +1174,6 @@ template < int NEARCP > void Collide::collisions_one_sw()
 
       ncollide_one++;
     } // loop for attempts
-
-    // remove small weight particles if no minimum weight reduction
-    /*if(reduceMinFlag > 0) continue;
-    gavg = gsum/np;
-    double gremove = 0.0;
-    int nremain = np;
-    for(i = 0; i < np; i++) {
-      ipart = &particles[plist[i]];
-      gi = ipart->sw;
-      // if weight is too small
-      if(gi < gavg/1e6 || gi < 1) {
-        gremove += gi;
-        nremain--;
-        if (ndelete == maxdelete) {
-          maxdelete += DELTADELETE;
-          memory->grow(dellist,maxdelete,"collide:dellist");
-        }
-        ipart->sw = -1;
-        dellist[ndelete++] = plist[i];
-      }
-    }
-
-    // assume the total removed weight is << remaining weight
-    double gsum2 = 0.0;
-    double galloc = gremove/static_cast <double> (nremain);
-    for(i = 0; i < np; i++) {
-      ipart = &particles[plist[i]];
-      gi = ipart->sw;
-      // if weight is too small
-      if(gi > 0) {
-        ipart->sw = gi + galloc;
-        gsum2 += ipart->sw;
-      }
-    }
-
-    if(gremove/gsum > 0.001) {
-      printf("gsum-gsum2: %4.8e; gremove: %4.8e\n", gsum-gsum2, gremove);
-      printf("gremain: %4.8e; gremove/gorig: %4.8e\n", gsum-gremove, gremove/gsum);
-      printf("many removed\n");
-      if(nremain == 0) error->one(FLERR,"all removed");
-    }*/
-
   }// loop for cells
 }
 
@@ -1266,7 +1237,7 @@ void Collide::sw_reduce()
       // if too big, break
       // should have to use this scarcely
       if(dnRed == 0) Abuf += 1.0;
-      if(Abuf > 10) break;
+      if(Abuf > 10) break; // avoid infinite loop
     }
     //redFlag = 1;
   }// loop for cells
@@ -2589,11 +2560,13 @@ void Collide::divideMerge(int *node_pid, int np)
   Particle::Species *species = particle->species;
 
   double gsum, gV[3], gVV[3][3], gVVV[3];
+  double V[3], Vsq;
   double mass = species[0].mass;
 
   gsum = 0.0;
   for(int i = 0; i < 3; i++) {
     gV[i] = 0.0;
+    V[i] = 0.0;
     gVVV[i] = 0.0;
     for(int j = 0; j < 3; j++)
       gVV[i][j] = 0.0;
@@ -2637,7 +2610,7 @@ void Collide::divideMerge(int *node_pid, int np)
     for(int d = 0; d < 3; d++) vpA[r+1][d] = vpins[d];
   }
 
-  double y, t, tvar;
+  /*double y, t, tvar;
   for(int p = 0; p < np; p++) {
     ip = &particles[node_pid[p]];
     //memcpy(vp,ip->v,3*sizeof(double));
@@ -2679,14 +2652,60 @@ void Collide::divideMerge(int *node_pid, int np)
       gVVV[i] = t;  
       //gVVV[i] += gp*vp[i]*vpsq;
     }
-  }
-  for(int i = 0; i < 3; i++) gVVV[i] *= 0.5;
+  }*/
 
+  double y, t, tvar;
+  for(int p = 0; p < np; p++) {
+    ip = &particles[node_pid[p]];
+    //memcpy(vp,ip->v,3*sizeof(double));
+    //gp = ip->sw;
+    gp = gpA[p];
+    for(int d = 0; d < 3; d++) vp[d] = vpA[p][d];
+
+    if(gp < 0) error->one(FLERR,"negative weight");
+
+    y = gp - cgsum;
+    t = gsum + y;
+    cgsum = (t - gsum) - y;
+    gsum = t; // mass
+    // gsum += gp;
+    vpsq = 0.0;
+    for(int i = 0; i < 3; i++) {
+      y = gp*vp[i] - cgV[i];
+      t = gV[i] + y;
+      cgV[i] = (t - gV[i]) - y;
+      gV[i] = t;
+      //gV[i] += gp*vp[i]; // momentum (1st)
+
+      // calculate velocity as rolling mean
+      V[i] += gp/gsum*(vp[i]-V[i]);
+
+      vpsq += vp[i]*vp[i];
+      // stress tensor (2nd)
+      for(int j = 0; j < 3; j++) { // only need upper triangle
+        y = gp*vp[i]*vp[j] - cgVV[i][j];
+        t = gVV[i][j] + y;
+        cgVV[i][j] = (t - gVV[i][j]) - y;
+        gVV[i][j] = t;  
+        //gVV[i][j] += gp*vp[i]*vp[j];
+      } // end j
+    } // end i
+
+    // heat flux (3rd)
+    for(int i = 0; i < 3; i++) {
+      y = gp*vp[i]*vpsq - cgVVV[i];
+      t = gVVV[i] + y;
+      cgVVV[i] = (t - gVVV[i]) - y;
+      gVVV[i] = t;  
+      //gVVV[i] += gp*vp[i]*vpsq;
+    }
+  }
+
+  for(int i = 0; i < 3; i++) gVVV[i] *= 0.5;
   // Compute center of mass velocity and its square
-  double V[3], Vsq;
   Vsq = 0.0;
   for(int i = 0; i < 3; i++) {
-    V[i] = gV[i]/gsum;
+    // V[i] = gV[i]/gsum; // calculated before
     Vsq += V[i]*V[i];
   }
 
@@ -2701,15 +2720,41 @@ void Collide::divideMerge(int *node_pid, int np)
 
 
 /*------------------------------------------------------------------------ */
+  /*int reduceFlag = -1;
+  if(npFlag > 0 && gthFlag > 0) {
+    if(np <= npmx || gsum < gthresh) reduceFlag = 1;
+  } else if(npFlag > 0) {
+    if(np <= npmx) reduceFlag = 1;
+  } else if(gthFlag > 0) {
+    if(gsum < gthresh) reduceFlag = 1;
+  } else {
+    error->one(FLERR,"no threshold set");
+  }*/
 
-  if(np <= npmx && gsum < gthresh) { // npmx is now the maximum number of particles in a group
+  if(np < npmx || gsum < gthresh) { // npmx is now the maximum number of particles in a group
+  //if(gsum < gthresh) { // npmx is now the maximum number of particles in a group
+  //if(reduceFlag > 0) {
+    // grow currentCluster if needed
+    if (np > maxCluster) {
+      while (np > maxCluster) maxCluster += 10;
+      memory->destroy(currentCluster);
+      memory->create(currentCluster,maxCluster,"collide:currentCluster");
+    }
+
     npCluster = np;
     for(int i = 0; i < np; i++) currentCluster[i] = node_pid[i];
 
     // Temperature and energy
     double T = (pij[0][0] + pij[1][1] + pij[2][2])/(3.0 * gsum);
 
-    if(T < 0 || T != T) error->one(FLERR,"negative temp");
+    if(T < 0 || T != T) {
+      for(int i = 0; i < np; i++) {
+        ip = &particles[node_pid[i]];
+        printf("g: %4.3e; v: %4.3e, %4.3e, %4.3e\n", ip->sw,
+          ip->v[0], ip->v[1], ip->v[2]);
+      }
+      error->one(FLERR,"negative temp");
+    }
 
     // Compute central heat flux
     for(int i = 0; i < 3; i++) q[i] = gVVV[i] -
@@ -2776,6 +2821,7 @@ void Collide::divideMerge(int *node_pid, int np)
     printf("maxevec: %4.3e, %4.3e, %4.3e\n", maxevec[0], maxevec[1], maxevec[2]);
     error->one(FLERR,"no change after division");
   }
+
   divideMerge(pidL,npL);
   divideMerge(pidR,npR);
 }

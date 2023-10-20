@@ -141,7 +141,6 @@ class Collide : protected Pointers {
 
   // SWPM
   int swpmflag;
-  int gthflag; // weight threshold flag for splitting
 
   // Models weight transfer function as G = min(g)/(1+gamma)
   // Set either to zero to avoid either method
@@ -167,6 +166,8 @@ class Collide : protected Pointers {
   // max depth when constructing binary tree
   // if 0, then group all particles
   int npmx;
+  int gthFlag; // temporary
+  int npFlag; // temporary
   double gthresh;
   double g_grp_max;
 

@@ -550,10 +550,6 @@ void CreateParticles::create_local(bigint np)
   double volsum = 0.0;
   bigint nprev = 0;
 
-  // TEMP
-  double vx4 = 0.0;
-  int Np = 0;
-
   for (int i = 0; i < nglocal; i++) {
     if (cinfo[i].type != OUTSIDE) continue;
     lo = cells[i].lo;
@@ -633,7 +629,7 @@ void CreateParticles::create_local(bigint np)
         v[1] = vs*sinphi*sin(theta);
         v[2] = vs*cosphi;*/
 
-        for(int i = 0; i < 3; i++) {
+        /*for(int i = 0; i < 3; i++) {
           while(true) {
             vs = (2.0*random->uniform()-1.0)*vm;
             pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
@@ -641,7 +637,22 @@ void CreateParticles::create_local(bigint np)
             if(pmx*random->uniform() < pv2) break;
           }
           v[i] = vs;
+        }*/
+
+        double vpx, vpy, vpz;
+        while(true) {
+          vpx = (2.0*random->uniform()-1.0)*vm;
+          vpy = (2.0*random->uniform()-1.0)*vm;
+          vpz = (2.0*random->uniform()-1.0)*vm;
+          vs = sqrt(vpx*vpx + vpy*vpy + vpz*vpz);
+          pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+          if(pmx < pv2) error->one(FLERR,"not bounded");
+          if(pmx*random->uniform() < pv2) break;
         }
+
+        v[0] = vpx;
+        v[1] = vpy;
+        v[2] = vpz;
 
       } else {
         vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
@@ -660,9 +671,6 @@ void CreateParticles::create_local(bigint np)
         }
       }
 
-      vx4 += (v[0]*v[0]*v[0]*v[0]);
-      Np++;
-
       erot = particle->erot(ispecies,temp_rot*tempscale,random);
       evib = particle->evib(ispecies,temp_vib*tempscale,random);
 
@@ -680,7 +688,6 @@ void CreateParticles::create_local(bigint np)
 
     nprev += npercell;
   }
-  printf("v4/np: %4.3e\n", vx4/Np);
   delete random;
 }
 
@@ -868,19 +875,20 @@ void CreateParticles::create_local_twopass(bigint np)
         //double pmx = cpv2*exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
         double pmx = exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
 
-        while(pmx*random->uniform() > pv2) {
-          if(pmx < pv2) error->one(FLERR,"not bounded");
-          vs = random->uniform()*vm;
+        double vpx, vpy, vpz;
+        while(true) {
+          vpx = (2.0*random->uniform()-1.0)*vm;
+          vpy = (2.0*random->uniform()-1.0)*vm;
+          vpz = (2.0*random->uniform()-1.0)*vm;
+          vs = sqrt(vpx*vpx + vpy*vpy + vpz*vpz);
           pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+          if(pmx < pv2) error->one(FLERR,"not bounded");
+          if(pmx*random->uniform() < pv2) break;
         }
 
-        double theta = MY_2PI * random->uniform();
-        double cosphi = 2.0 * random->uniform() - 1.0;
-        double sinphi = sqrt(1.0 - cosphi*cosphi);
-        
-        v[0] = vs*sinphi*cos(theta);
-        v[1] = vs*sinphi*sin(theta);
-        v[2] = vs*cosphi;
+        v[0] = vpx;
+        v[1] = vpy;
+        v[2] = vpz;
       } else {
         vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
         vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
