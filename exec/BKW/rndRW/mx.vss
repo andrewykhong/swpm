@@ -1,0 +1,10 @@
+﻿# VSS collision model parameters for each species
+# Gopalan 2016
+
+# species (or species pair)
+# diameter (m)
+# omega
+# tref
+# alpha
+
+Ar  	4.17E-10    1.000    273.15    1.414

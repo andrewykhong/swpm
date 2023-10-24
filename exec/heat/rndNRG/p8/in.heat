@@ -94,7 +94,7 @@ create_particles   air n ${N}
 variable td        equal ${rho}*${Ly}*${Ly}/${mu_ref}
 variable dy        equal ${Ly}/${ny}
 variable dyolam    equal ${dy}/${lam}
-variable dt        equal 1.0e-12
+variable dt        equal 1.0e-11
 variable Nsteady   equal ceil(${td}/${dt})*5.0
 variable tsteady   equal ${Nsteady}*${dt}
 variable Kn_g      equal ${lam}/${Ly}
@@ -122,23 +122,23 @@ compute q          eflux/grid/sw all all heatx heaty heatz
 #############
 # Transient #
 #############
-stats              100000
+stats              1000
 stats_style        step np nattempt ncoll
 
 timestep           ${dt}
-run                50000000
+run                15000000
 
 #################
 # Collect Stats #
 #################
-fix state         ave/grid all 5 2000 10000 c_state[*]  ave running
-fix rho           ave/grid all 5 2000 10000 c_rho[*]    ave running
-fix vel           ave/grid all 5 2000 10000 c_vel[*]    ave running
-fix mom           ave/grid all 5 2000 10000 c_mom[*]    ave running
-fix q             ave/grid all 5 2000 10000 c_q[*]      ave running
+fix state         ave/grid all 5 200 1000 c_state[*]  ave running
+fix rho           ave/grid all 5 200 1000 c_rho[*]    ave running
+fix vel           ave/grid all 5 200 1000 c_vel[*]    ave running
+fix mom           ave/grid all 5 200 1000 c_mom[*]    ave running
+fix q             ave/grid all 5 200 1000 c_q[*]      ave running
 
-dump state        grid all 5000000 state.* id yc f_rho[*] f_state[*]
-dump vel          grid all 5000000 vel.*   id yc f_vel[*]
-dump mom          grid all 5000000 vmom.*  id yc f_mom[*] f_q[*]
+dump state        grid all 500000 state.* id yc f_rho[*] f_state[*]
+dump vel          grid all 500000 vel.*   id yc f_vel[*]
+dump mom          grid all 500000 vmom.*  id yc f_mom[*] f_q[*]
 
-run               20000000
+run               3000000

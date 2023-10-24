@@ -22,7 +22,7 @@ variable gamma     equal 1.4
 # Chosen Parameters #
 #####################
 variable T         equal 298.15
-variable p         equal 101.3250
+variable p         equal 101325.0
 variable Ma        equal 0.2
 variable ppc       equal 100.0
 
@@ -49,10 +49,10 @@ mixture            air Ar vstream ${vb} 0.0 0.0 temp ${T}
 mixture            air Ar frac 1.0
 
 collide            vss air opt.vss
+collide_modify     remain no
+
 collide_modify  swpm yes -1.0 1.0
 collide_modify  RW 128.0 4.0
-#collide_modify  position rnd
-#collide_modify  reduceMin yes
 
 #####################
 # Boundary/Geometry #
@@ -62,7 +62,7 @@ variable Ly        equal 4.0e-5
 variable Lz        equal 0.0001
 
 variable nx        equal 1
-variable ny        equal 100
+variable ny        equal 5000
 variable nz        equal 1
 
 boundary           p s p
@@ -126,19 +126,19 @@ stats              1000
 stats_style        step np nattempt ncoll
 
 timestep           ${dt}
-run                5000000
+run                10000000
 
 #################
 # Collect Stats #
 #################
-fix state         ave/grid all 5 2000 10000 c_state[*]  ave running
-fix rho           ave/grid all 5 2000 10000 c_rho[*]    ave running
-fix vel           ave/grid all 5 2000 10000 c_vel[*]    ave running
-fix mom           ave/grid all 5 2000 10000 c_mom[*]    ave running
-fix q             ave/grid all 5 2000 10000 c_q[*]      ave running
+fix state         ave/grid all 5 200 1000 c_state[*]  ave running
+fix rho           ave/grid all 5 200 1000 c_rho[*]    ave running
+fix vel           ave/grid all 5 200 1000 c_vel[*]    ave running
+fix mom           ave/grid all 5 200 1000 c_mom[*]    ave running
+fix q             ave/grid all 5 200 1000 c_q[*]      ave running
 
-dump state        grid all 2000000 state.* id yc f_rho[*] f_state[*]
-dump vel          grid all 2000000 vel.*   id yc f_vel[*]
-dump mom          grid all 2000000 vmom.*  id yc f_mom[*] f_q[*]
+dump state        grid all 500000 state.* id yc f_rho[*] f_state[*]
+dump vel          grid all 500000 vel.*   id yc f_vel[*]
+dump mom          grid all 500000 vmom.*  id yc f_mom[*] f_q[*]
 
-run               2000000
+run               20000000

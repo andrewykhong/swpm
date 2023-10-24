@@ -1,0 +1,99 @@
+################################################################################
+# 2D Fourier flow with diffuse walls of unequal temperature
+# Verify that Kn_q has a small effect on the conductivity
+################################################################################
+seed               28310 #0
+seed               884783 #1
+seed               525530 #2
+seed               993269 #3
+seed               971443 #4
+seed               102151 #5
+seed               798776 #6
+seed               81756 #7
+seed               879050 #8
+seed               171957 #9
+dimension          3
+global             gridcut 1.0e-8 comm/sort yes
+
+#############
+# Constants #
+#############
+variable kb        equal 1.380658E-23
+variable pi        equal 3.14159
+
+##################
+# Gas parameters #
+##################
+variable gamma     equal 1.4
+
+#####################
+# Chosen Parameters #
+#####################
+variable T         equal 273.15
+variable nden      equal 1e20
+variable Ma        equal 0.2
+variable ppc       equal 1024.0
+
+################
+# Precalculate #
+################
+variable mass_ref  equal 6.63e-26
+variable R_ref     equal ${kb}/${mass_ref}
+variable RT        equal ${R_ref}*${T}
+variable p         equal ${nden}*${kb}*${T}
+variable mu_ref    equal 2.117e-5
+
+###########
+# Species #
+###########
+species            air.species Ar
+
+mixture            air Ar vstream 0.0 0.0 0.0 temp ${T}
+mixture            air Ar frac 1.0
+
+collide            vss air mx.vss
+collide_modify     remain no
+
+#####################
+# Boundary/Geometry #
+#####################
+variable Lx        equal 0.0001
+variable Ly        equal 0.0001
+variable Lz        equal 0.0001
+
+variable nx        equal 1
+variable ny        equal 1
+variable nz        equal 1
+
+boundary           p p p
+
+create_box         0 ${Lx} 0 ${Ly} 0 ${Lz}
+create_grid        ${nx} ${ny} ${nz} block * * * 
+balance_grid       rcb part
+
+variable N         equal ${ny}*${ppc}
+variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
+
+global nrho ${nden}
+global fnum ${Fnum}
+
+variable beta0     equal 2.0/3.0
+create_particles   air n ${N} BKW yes ${beta0}
+
+###########
+# Outputs #
+###########
+compute moms        grid/sw all all M1 M2 M3 M4
+compute 1 reduce sum c_moms[1]
+compute 2 reduce sum c_moms[2]
+compute 3 reduce sum c_moms[3]
+compute 4 reduce sum c_moms[4]
+
+#############
+# Transient #
+#############
+stats              1
+stats_style        step np ncoll c_3 c_4
+
+timestep           2.0e-4
+run                1000

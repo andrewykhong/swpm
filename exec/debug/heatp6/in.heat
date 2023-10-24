@@ -3,8 +3,9 @@
 # Verify that Kn_q has a small effect on the conductivity
 ################################################################################
 
-seed               12456
+seed               28310
 dimension          3
+global             gridcut 1.0e-8 comm/sort yes
 
 #############
 # Constants #
@@ -61,11 +62,11 @@ collide_modify    swpm yes -1.0 1.0
 collide_modify   RW 128.0 8.0
 #collide_modify   LGZ 128.0 12.0
 
-collide_modify   position dev # picks from old positions to best preserve CoM
+#collide_modify   position dev # picks from old positions to best preserve CoM
 #collide_modify   position mean # can be unstable at times
 #collide_modify   position rnd # default
 
-collide_modify  reduceMin yes
+#collide_modify  reduceMin yes
 
 # Gono Nmax Ngrp Nr x2 v2 v3
 # default has 10 constraints
@@ -88,7 +89,7 @@ variable Ly        equal 4.0e-5
 variable Lz        equal 0.0001
 
 variable nx        equal 1
-variable ny        equal 200
+variable ny        equal 2500
 variable nz        equal 1
 
 boundary           p s p
@@ -166,4 +167,4 @@ fix q             ave/grid all 2 5000 10000 c_q[*]      ave running
 dump state        grid all 100000 state.* id yc f_rho[*] f_state[*]
 dump mom          grid all 100000 vmom.*  id yc f_vel[*] f_mom[*] f_q[*]
 
-run               50000
+run               150000
