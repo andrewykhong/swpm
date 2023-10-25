@@ -1169,7 +1169,6 @@ template < int NEARCP > void Collide::collisions_one_sw()
     } // loop for attempts
 
 		// Manually remove small weighted particles
-		if(reduceMinFlag > 0) continue;
     gavg = gsum/np;
     double gremove = 0.0;
     int nremain = np;
@@ -1342,7 +1341,7 @@ void Collide::sw_reduce_dev()
       while (ip >= 0) {
         ipart = &particles[ip];
         double g = ipart->sw;
-        if(g > 0 && g <= (gmean-2.00*gstd)) plist[n++] = ip;
+        if(g > 0 && g <= (gmean-1.65*gstd)) plist[n++] = ip;
         ip = next[ip];
       }
       xmr[0] = xmr[1] = xmr[2] = 0.0;
@@ -3043,6 +3042,9 @@ void Collide::merge()
     double gi = igsum / (1.0 + itheta * itheta);
     double gj = igsum - gi;
 
+		if(gi != gi || gj != gj || gi < 0 || gj < 0)
+			error->one(FLERR,"invalid weight");
+
     // select particle pair with bias toward larger weight
     if(rFlag == 1) {
       error->one(FLERR,"unstable atm");
@@ -3197,6 +3199,9 @@ void Collide::merge()
 
       gi[iK] = igsum / (nK * (1.0 + gamma[iK] * gamma[iK]));
       gj[iK] = igsum * gamma[iK] * gamma[iK] / (nK * (1.0 + gamma[iK] * gamma[iK]));
+
+			if(gi[iK] != gi[iK] || gj[iK] != gj[iK] || gi[iK] < 0 || gj[iK] < 0)
+				error->one(FLERR,"invalid weight");
 
       // set new velocities and weights (double checked)
       for(int d = 0; d < 3; d++) {
