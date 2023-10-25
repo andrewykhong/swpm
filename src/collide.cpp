@@ -129,8 +129,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   rFlag = 0;
   npThresh = 0;
   reduceMinFlag = -1;
-  //gthFlag = 1; // always on
-  //npFlag = 1; // always on
+  gthFlag = 0; // gsum or npmx
 
   // SWPM - Reduction
   memory->create(ipij,3,3,"collide:ipij");
@@ -512,18 +511,12 @@ void Collide::modify_params(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"dev") == 0) rFlag = 3;
       else error->all(FLERR,"Illegal collide_modify command");
       iarg += 2;
-    //} else if (strcmp(arg[iarg],"weightOnly") == 0) {
-    //  if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
-    //  if (strcmp(arg[iarg+1],"yes") == 0) npFlag = -1; // turn off np
-    //  else if (strcmp(arg[iarg+1],"no") == 0) npFlag = 1;
-    //  else error->all(FLERR,"Illegal collide_modify command");
-    //  iarg += 2;
-    //} else if (strcmp(arg[iarg],"npOnly") == 0) {
-    //  if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
-    //  if (strcmp(arg[iarg+1],"yes") == 0) gthFlag = -1; // turn off weight
-    //  else if (strcmp(arg[iarg+1],"no") == 0) gthFlag = 1;
-    //  else error->all(FLERR,"Illegal collide_modify command");
-    //  iarg += 2;
+    } else if (strcmp(arg[iarg],"gthresh") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
+      if (strcmp(arg[iarg+1],"gn") == 0) gthFlag = 0;
+      else if (strcmp(arg[iarg+1],"n") == 0) gthFlag = 1;
+      else error->all(FLERR,"Illegal collide_modify command");
+      iarg += 2;
     } else error->all(FLERR,"Illegal collide_modify command");
   }
 }
@@ -1174,6 +1167,46 @@ template < int NEARCP > void Collide::collisions_one_sw()
 
       ncollide_one++;
     } // loop for attempts
+
+		// Manually remove small weighted particles
+		if(reduceMinFlag > 0) continue;
+    gavg = gsum/np;
+    double gremove = 0.0;
+    int nremain = np;
+    for(i = 0; i < np; i++) {
+      ipart = &particles[plist[i]];
+      gi = ipart->sw;
+      // if weight is too small
+      if(gi < gavg/1e6 || gi < 1) {
+        gremove += gi;
+        nremain--;
+        if (ndelete == maxdelete) {
+          maxdelete += DELTADELETE;
+          memory->grow(dellist,maxdelete,"collide:dellist");
+        }
+        ipart->sw = -1;
+        dellist[ndelete++] = plist[i];
+      }
+    }
+    // assume the total removed weight is << remaining weight
+    double gsum2 = 0.0;
+    double galloc = gremove/static_cast <double> (nremain);
+    for(i = 0; i < np; i++) {
+      ipart = &particles[plist[i]];
+      gi = ipart->sw;
+      // if weight is too small
+      if(gi > 0) {
+        ipart->sw = gi + galloc;
+        gsum2 += ipart->sw;
+      }
+    }
+    if(gremove/gsum > 0.001) {
+      printf("gsum-gsum2: %4.8e; gremove: %4.8e\n", gsum-gsum2, gremove);
+      printf("gremain: %4.8e; gremove/gorig: %4.8e\n", gsum-gremove, gremove/gsum);
+      printf("many removed\n");
+      if(nremain == 0) error->one(FLERR,"all removed");
+    }
+
   }// loop for cells
 }
 
@@ -1205,7 +1238,7 @@ void Collide::sw_reduce()
     if (n <= Nmax) continue;
 
     double Abuf = 2.0;
-    while(n > Nmax) {
+    while(n > 0.5*Nmax) {
       // create particle list
       ip = cinfo[icell].first;
       n = 0;
@@ -1236,8 +1269,8 @@ void Collide::sw_reduce()
       // if none reduced, increase weight threshold
       // if too big, break
       // should have to use this scarcely
-      if(dnRed == 0) Abuf += 1.0;
-      if(Abuf > 10) break; // avoid infinite loop
+      if(dnRed == 0) Abuf += 2.0;
+      if(Abuf > 20) break; // avoid infinite loop
     }
     //redFlag = 1;
   }// loop for cells
@@ -1276,7 +1309,7 @@ void Collide::sw_reduce_dev()
 
     // there should not be so many collisions for this to be called more than once
     double Abuf = 2.0;
-    while(n > Nmax) {
+    while(n > 0.5*Nmax) {
       // find mean weight
       ip = cinfo[icell].first;
       n = 0;
@@ -1309,7 +1342,7 @@ void Collide::sw_reduce_dev()
       while (ip >= 0) {
         ipart = &particles[ip];
         double g = ipart->sw;
-        if(g > 0 && g <= (gmean-1.65*gstd)) plist[n++] = ip;
+        if(g > 0 && g <= (gmean-2.00*gstd)) plist[n++] = ip;
         ip = next[ip];
       }
       xmr[0] = xmr[1] = xmr[2] = 0.0;
@@ -1334,8 +1367,8 @@ void Collide::sw_reduce_dev()
       // if none reduced, increase weight threshold
       // if too big, break
       // should have to use this scarcely
-      if(dnRed == 0) Abuf += 1.0;
-      if(Abuf > 10) break;
+      if(dnRed == 0) Abuf += 2.0;
+      if(Abuf > 20) break;
     }
     //redFlag = 1;
   }// loop for cells
@@ -2720,20 +2753,18 @@ void Collide::divideMerge(int *node_pid, int np)
 
 
 /*------------------------------------------------------------------------ */
-  /*int reduceFlag = -1;
-  if(npFlag > 0 && gthFlag > 0) {
+  int reduceFlag = -1;
+  if(gthFlag == 0) {
     if(np <= npmx || gsum < gthresh) reduceFlag = 1;
-  } else if(npFlag > 0) {
+  } else if(gthFlag == 1) {
     if(np <= npmx) reduceFlag = 1;
-  } else if(gthFlag > 0) {
-    if(gsum < gthresh) reduceFlag = 1;
   } else {
     error->one(FLERR,"no threshold set");
-  }*/
+  }
 
-  if(np < npmx || gsum < gthresh) { // npmx is now the maximum number of particles in a group
+  //if(np < npmx || gsum < gthresh) { // npmx is now the maximum number of particles in a group
   //if(gsum < gthresh) { // npmx is now the maximum number of particles in a group
-  //if(reduceFlag > 0) {
+  if(reduceFlag > 0) {
     // grow currentCluster if needed
     if (np > maxCluster) {
       while (np > maxCluster) maxCluster += 10;
