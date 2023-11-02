@@ -1237,7 +1237,7 @@ void Collide::sw_reduce()
     if (n <= Nmax) continue;
 
     double Abuf = 2.0;
-    while(n > 0.5*Nmax) {
+    while(n > Nmax) {
       // create particle list
       ip = cinfo[icell].first;
       n = 0;
@@ -1308,7 +1308,7 @@ void Collide::sw_reduce_dev()
 
     // there should not be so many collisions for this to be called more than once
     double Abuf = 2.0;
-    while(n > 0.5*Nmax) {
+    while(n > Nmax) {
       // find mean weight
       ip = cinfo[icell].first;
       n = 0;
@@ -1354,7 +1354,7 @@ void Collide::sw_reduce_dev()
       while (ip >= 0) {
         ipart = &particles[ip];
         double g = ipart->sw;
-        if(g > 0 && g <= gthresh) plist[n++] = ip;
+        if(g > 0 && g <= 2.0*gmean) plist[n++] = ip;
         ip = next[ip];
       }
       xmr[0] = xmr[1] = xmr[2] = 0.0;
@@ -2589,6 +2589,11 @@ void Collide::divideMerge(int *node_pid, int np)
 
 /*------------------------------------------------------------------------ */
   // compute covariance
+
+	// Based on Ling 1974, a two-pass calculation of mean seems best
+  // M11 = Sum(x_i)/n
+	// M21 = M11 + Sum(x_i - M11) / n;
+	// first compute 
   Particle::Species *species = particle->species;
 
   double gsum, gV[3], gVV[3][3], gVVV[3];
