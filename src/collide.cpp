@@ -2593,23 +2593,24 @@ void Collide::divideMerge(int *node_pid, int np)
 	// Based on Ling 1974, a two-pass calculation of mean seems best
   // M11 = Sum(x_i)/n
 	// M21 = M11 + Sum(x_i - M11) / n;
-	// first compute 
+	// first compute M11 with Kahan sum
   Particle::Species *species = particle->species;
 
   double gsum, gV[3], gVV[3][3], gVVV[3];
-  double V[3], Vsq;
+  double V11[3], Vsq;
   double mass = species[0].mass;
 
   gsum = 0.0;
   for(int i = 0; i < 3; i++) {
     gV[i] = 0.0;
-    V[i] = 0.0;
+    V11[i] = 0.0;
     gVVV[i] = 0.0;
     for(int j = 0; j < 3; j++)
       gVV[i][j] = 0.0;
   }
 
   // for KahanSum
+	// change to Neumaier (improved Kahan sum)
   double cgsum, cgV[3], cgVV[3][3], cgVVV[3];
   cgsum = 0.0;
   for(int i = 0; i < 3; i++) {
@@ -2647,104 +2648,92 @@ void Collide::divideMerge(int *node_pid, int np)
     for(int d = 0; d < 3; d++) vpA[r+1][d] = vpins[d];
   }
 
-  /*double y, t, tvar;
+  double y;
+	double t;
   for(int p = 0; p < np; p++) {
-    ip = &particles[node_pid[p]];
-    //memcpy(vp,ip->v,3*sizeof(double));
-    //gp = ip->sw;
     gp = gpA[p];
     for(int d = 0; d < 3; d++) vp[d] = vpA[p][d];
 
     if(gp < 0) error->one(FLERR,"negative weight");
 
-    y = gp - cgsum;
+		y = gp;
     t = gsum + y;
-    cgsum = (t - gsum) - y;
-    gsum = t; // mass
-    // gsum += gp;
+		if(std::abs(gsum) >= std::abs(y)) {
+    	cgsum += ((gsum - t) + y);
+		} else {
+			cgsum += ((y - t) + gsum);
+		}
+   	gsum = t;
+
     vpsq = 0.0;
     for(int i = 0; i < 3; i++) {
-      y = gp*vp[i] - cgV[i];
+			y = gp*vp[i];
       t = gV[i] + y;
-      cgV[i] = (t - gV[i]) - y;
+			if(std::abs(gV[i]) >= std::abs(y)) {
+		  	cgV[i] += ((gV[i] - t) + y);
+			} else {
+				cgV[i] += ((y - t) + gV[i]);
+			}
       gV[i] = t;
-      //gV[i] += gp*vp[i]; // momentum (1st)
+
+      // calculate first trial mean for velocity as rolling mean
+      V11[i] += gp/gsum*(vp[i]-V11[i]);
 
       vpsq += vp[i]*vp[i];
       // stress tensor (2nd)
       for(int j = 0; j < 3; j++) { // only need upper triangle
-        y = gp*vp[i]*vp[j] - cgVV[i][j];
-        t = gVV[i][j] + y;
-        cgVV[i][j] = (t - gVV[i][j]) - y;
-        gVV[i][j] = t;  
-        //gVV[i][j] += gp*vp[i]*vp[j];
+				y = gp*vp[i]*vp[j];
+		    t = gVV[i][j] + y;
+				if(std::abs(gVV[i][j]) >= std::abs(y)) {
+					cgVV[i][j] += ((gVV[i][j] - t) + y);
+				} else {
+					cgVV[i][j] += ((y - t) + gVV[i][j]);
+				}
+		    gVV[i][j] = t;
       } // end j
     } // end i
 
     // heat flux (3rd)
     for(int i = 0; i < 3; i++) {
-      y = gp*vp[i]*vpsq - cgVVV[i];
+			y = gp*vp[i]*vpsq;
       t = gVVV[i] + y;
-      cgVVV[i] = (t - gVVV[i]) - y;
-      gVVV[i] = t;  
-      //gVVV[i] += gp*vp[i]*vpsq;
+			if(std::abs(gVVV[i]) >= std::abs(y)) {
+		  	cgVVV[i] += ((gVVV[i] - t) + y);
+			} else {
+				cgVVV[i] += ((y - t) + gVVV[i]);
+			}
+      gVVV[i] = t;
     }
-  }*/
+  }
 
-  double y, t, tvar;
-  for(int p = 0; p < np; p++) {
-    ip = &particles[node_pid[p]];
-    //memcpy(vp,ip->v,3*sizeof(double));
-    //gp = ip->sw;
-    gp = gpA[p];
-    for(int d = 0; d < 3; d++) vp[d] = vpA[p][d];
-
-    if(gp < 0) error->one(FLERR,"negative weight");
-
-    y = gp - cgsum;
-    t = gsum + y;
-    cgsum = (t - gsum) - y;
-    gsum = t; // mass
-    // gsum += gp;
-    vpsq = 0.0;
-    for(int i = 0; i < 3; i++) {
-      y = gp*vp[i] - cgV[i];
-      t = gV[i] + y;
-      cgV[i] = (t - gV[i]) - y;
-      gV[i] = t;
-      //gV[i] += gp*vp[i]; // momentum (1st)
-
-      // calculate velocity as rolling mean
-      V[i] += gp/gsum*(vp[i]-V[i]);
-
-      vpsq += vp[i]*vp[i];
-      // stress tensor (2nd)
-      for(int j = 0; j < 3; j++) { // only need upper triangle
-        y = gp*vp[i]*vp[j] - cgVV[i][j];
-        t = gVV[i][j] + y;
-        cgVV[i][j] = (t - gVV[i][j]) - y;
-        gVV[i][j] = t;  
-        //gVV[i][j] += gp*vp[i]*vp[j];
-      } // end j
-    } // end i
-
-    // heat flux (3rd)
-    for(int i = 0; i < 3; i++) {
-      y = gp*vp[i]*vpsq - cgVVV[i];
-      t = gVVV[i] + y;
-      cgVVV[i] = (t - gVVV[i]) - y;
-      gVVV[i] = t;  
-      //gVVV[i] += gp*vp[i]*vpsq;
-    }
+	// add accumulated error at end
+	// also avoid asosciativity rule in compiler
+  gsum += cgsum;
+  for(int i = 0; i < 3; i++) {
+    gV[i] += cgV[i];
+    gVVV[i] += cgVVV[i];
+    for(int j = 0; j < 3; j++)
+      gVV[i][j] += cgVV[i][j];
   }
 
   for(int i = 0; i < 3; i++) gVVV[i] *= 0.5;
+
+	// second pass for mean velocity
+	double V[3];
+	V[0] = V[1] = V[2] = 0.0;
+  for(int p = 0; p < np; p++) {
+    gp = gpA[p];
+    for(int d = 0; d < 3; d++) vp[d] = vpA[p][d];
+
+    if(gp < 0) error->one(FLERR,"negative weight");
+		// calculate second trial mean
+    for(int i = 0; i < 3; i++) V[i] += gp/gsum*(vp[i]-V11[i]);
+  }
+	for(int i = 0; i < 3; i++) V[i] += V11[i];
+
   // Compute center of mass velocity and its square
   Vsq = 0.0;
-  for(int i = 0; i < 3; i++) {
-    // V[i] = gV[i]/gsum; // calculated before
-    Vsq += V[i]*V[i];
-  }
+  for(int i = 0; i < 3; i++) Vsq += V[i]*V[i];
 
   // Compute central stress
   double pij[3][3], q[3];
@@ -2754,7 +2743,6 @@ void Collide::divideMerge(int *node_pid, int np)
       Rij[i][j] = pij[i][j]/gsum; 
     } // end j
   } // end i
-
 
 /*------------------------------------------------------------------------ */
   int reduceFlag = -1;
@@ -2788,7 +2776,7 @@ void Collide::divideMerge(int *node_pid, int np)
         printf("g: %4.3e; v: %4.3e, %4.3e, %4.3e\n", ip->sw,
           ip->v[0], ip->v[1], ip->v[2]);
       }
-      error->one(FLERR,"negative temp");
+      error->one(FLERR,"negative/nan temp");
     }
 
     // Compute central heat flux
