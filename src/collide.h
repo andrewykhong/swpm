@@ -31,6 +31,7 @@ class Collide : protected Pointers {
   int vibstyle;       // none/discrete/smooth vibrational modes
   int nearcp;         // 1 for near neighbor collisions
   int nearlimit;      // limit on neighbor serach for near neigh collisions
+  int swpmflag;       // swpm flag
 
   int ncollide_one,nattempt_one,nreact_one;
   bigint ncollide_running,nattempt_running,nreact_running;
@@ -41,6 +42,7 @@ class Collide : protected Pointers {
   void modify_params(int, char **);
   void reset_vremax();
   virtual void collisions();
+  void reduce();
 
   virtual double vremax_init(int, int) = 0;
   virtual double attempt_collision(int, int, double) = 0;
@@ -139,9 +141,6 @@ class Collide : protected Pointers {
                          //   base class when child copy is destroyed)
   int kokkos_flag;       // 1 if collide method supports Kokkos
 
-  // SWPM
-  int swpmflag;
-
   // Models weight transfer function as G = min(g)/(1+gamma)
   // Set either to zero to avoid either method
   int Nmin;             // Particles split if local count < Nmin
@@ -162,6 +161,7 @@ class Collide : protected Pointers {
   int npThresh;           // min. number needed to merge (depends on scheme)
   int dnRed;              // number of particles deleted due to reduction
   int reduceMinFlag;      // reduce smallest weights first
+  int *pL, *pLU, *pU;
 
   // max depth when constructing binary tree
   // if 0, then group all particles
@@ -265,19 +265,11 @@ class Collide : protected Pointers {
   void gmax_init(); // intialize maximum weight
 
   // Particle reduction
-
   void divideMerge(int*, int);   // particle list, number of particles, flag if root
-  double computeRhoCovariance(int*, int);
-  double computeCovariance(int*, int);
-
-  void computeVmom();
   void sw_reduce();
+  void sw_reduce_group();
   void sw_reduce_dev();
   void merge();
-  void LSCoM(const double m[3][3], const double *, const double, double *);
-
-  // use defined ints
-  int gonoskovMergeCoM();
   int gonoskovMerge();
 
   double weiszfeld(double &, double &, double &, int, double);
