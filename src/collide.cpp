@@ -2389,42 +2389,39 @@ template < int NEARCP > void Collide::collisions_one_sw()
     } // loop for attempts
 
 		// Manually remove small weighted particles
-    /*gavg = gsum/np;
-    double gremove = 0.0;
+    gavg = gsum/np;
+    double gdel, pdel[3];
+    gdel = pdel[0] = pdel[1] = pdel[2];
     int nremain = np;
     for(i = 0; i < np; i++) {
       ipart = &particles[plist[i]];
       gi = ipart->sw;
-      // if weight is too small
       if(gi < gavg/1e6) {
-        gremove += gi;
+        gdel += gi;
+        for(j = 0; j < 3; j++) pdel[j] += ipart->v[j]*gi;
         nremain--;
         if (ndelete == maxdelete) {
           maxdelete += DELTADELETE;
           memory->grow(dellist,maxdelete,"collide:dellist");
         }
-        ipart->sw = -1;
+        ipart->sw = -1; // to exclude from reduction later
         dellist[ndelete++] = plist[i];
       }
     }
 
-    // assume the total removed weight is << remaining weight
-    double gsum2 = 0.0;
-    double galloc = gremove/static_cast <double> (nremain);
+    // add removed weight and momentum to remaining particles
+    // should be small!
+    gdel /= nremain;
+    for(j = 0; j < 3; j++) pdel[j] /= nremain;
     for(i = 0; i < np; i++) {
       ipart = &particles[plist[i]];
       gi = ipart->sw;
       // if weight is too small
       if(gi > 0) {
-        ipart->sw = gi + galloc;
-        gsum2 += ipart->sw;
+        ipart->sw = gi + gdel;
+        for(j = 0; j < 3; j++) ipart->v[j] = ipart->v[j] + pdel[j]/gi;
       }
     }
-
-    if(gremove/gsum > 0.001) {
-      printf("many removed\n");
-      if(nremain == 0) error->one(FLERR,"all removed");
-    }*/
 
   }// loop for cells
 
@@ -2872,7 +2869,7 @@ void Collide::merge()
     int nK = 0;
     double ieval[3], ievec[3][3];
     for (i = 0; i < 3; i++) {
-      if( std::abs(eval[i]) >= SMALLNUM) {
+      if( std::abs(eval[i]) >= SMALLNUM && eval[i] > 0) {
         ieval[nK] = eval[i];
         for(int d = 0; d < 3; d++) ievec[nK][d] = evec[i][d];
         nK++;
@@ -2913,7 +2910,8 @@ void Collide::merge()
         }
 
         printf("group prop\n");
-        printf("eval: %4.3e; evec: %4.3e, %4.e, %4.3e\n",
+        printf("nK: %i; gamma[iK]: %4.3e\n", nK, gamma[iK]);
+        printf("eval: %4.3e; evec: %4.3e, %4.3e, %4.3e\n",
           ieval[iK], ievec[0][iK], ievec[1][iK], ievec[2][iK]);
         printf("igsum: %4.3e; qli: %4.3e\n", igsum, qli);
         printf("q: %4.3e, %4.3e, %4.3e\n", iq[0], iq[1], iq[2]);
