@@ -136,6 +136,7 @@ void FixEmitFace::init()
 
   dimension = domain->dimension;
   fnum = update->fnum;
+  if (update->fnum_emit > 0.0) fnum = update->fnum_emit;
   dt = update->dt;
 
   nspecies = particle->mixture[imix]->nspecies;

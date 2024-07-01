@@ -88,13 +88,13 @@ void CreateParticles::command(int narg, char **arg)
 
   int globalflag = 0;
   twopass = 0;
+  bkw = 0;
   region = NULL;
   speciesflag = densflag = velflag = tempflag = 0;
   sstr = sxstr = systr = szstr = NULL;
   dstr = dxstr = dystr = dzstr = NULL;
   tstr = txstr = tystr = tzstr = NULL;
   vxstr = vystr = vzstr = vstrx = vstry = vstrz = NULL;
-  BKWflag = 0;
 
   while (iarg < narg) {
     if (strcmp(arg[iarg],"global") == 0) {
@@ -163,12 +163,11 @@ void CreateParticles::command(int narg, char **arg)
       if (iarg+1 > narg) error->all(FLERR,"Illegal create_particles command");
       twopass = 1;
       iarg += 1;
-    } else if (strcmp(arg[iarg],"BKW") == 0) {
-      if (iarg+3 > narg) error->all(FLERR,"Illegal create_particles command");
-      if (strcmp(arg[iarg+1],"no") == 0) BKWflag = 0;
-      else if (strcmp(arg[iarg+1],"yes") == 0) BKWflag = 1;
-      beta0 = atof(arg[iarg+2]);
-      iarg += 3;
+    } else if (strcmp(arg[iarg],"bkw") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal create_particles command");
+      bkw = 1;
+      beta0 = atof(arg[iarg+1]);
+      iarg += 2;
     } else error->all(FLERR,"Illegal create_particles command");
   }
 
@@ -600,65 +599,41 @@ void CreateParticles::create_local(bigint np)
         sqrttempscale = sqrt(tempscale);
       }
 
-      if(BKWflag) {
-        // sample from initial BKW solution
-        double m2kT = 1.0/(vscale[isp]*vscale[isp]); // m / 2kT
-        double A = m2kT*(1.0+beta0);
-        double vm = 3.0*sqrt(2.0/m2kT);
-        //double cpv2 = pow(A/MY_PI,1.5);
-        double vs = (2.0*random->uniform()-1.0)*vm;
-        //double pv2 = cpv2*exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
-        double pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
+      if (bkw) {
+        double vmp = vscale[isp];
+        double vmax = 3.0*vmp;
+        double kTm = vmp*vmp*0.5;
+        double A = (1.0 + beta0)/kTm*0.5;
+        double pmax = exp(-A*vmp*vmp)*(1.+beta0*(A*vmp*vmp-1.5));
+        pmax *= 3;
 
-        double vs2mx = (1.0-0.5*beta0)/(m2kT*beta0*(1.0+beta0));
-        //double pmx = cpv2*exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
-        double pmx = exp(-A*vs2mx)*(1.0+beta0*(A*vs2mx - 1.5));
+        int found = 0;
+        double vv, pvv;
+        double cx, cy, cz, rrr, theta;
+        while (!found) {
+          vv = vmax*pow(random->uniform(),(1./3.));
+          pvv = exp(-A*vv*vv)*(1.+beta0*(A*vv*vv-1.5));
+          if (pvv > pmax) error->one(FLERR,"probabilty not bounded");
 
-        /*while(true) {
-          if(pmx < pv2) error->one(FLERR,"not bounded");
-          vs = random->uniform()*vm;
-          pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
-          if(pmx*random->uniform() < pv2) break;
-        }
+          if (pvv > pmax*random->uniform()) {
+            cz = 2*random->uniform()-1.;
+            rrr = sqrt(1-cz*cz);
+            theta = 2*MY_PI*random->uniform();
+            cx = rrr*cos(theta);
+            cy = rrr*sin(theta);
 
-        double theta = MY_2PI * random->uniform();
-        double cosphi = 2.0 * random->uniform() - 1.0;
-        double sinphi = sqrt(1.0 - cosphi*cosphi);
-        
-        v[0] = vs*sinphi*cos(theta);
-        v[1] = vs*sinphi*sin(theta);
-        v[2] = vs*cosphi;*/
-
-        /*for(int i = 0; i < 3; i++) {
-          while(true) {
-            vs = (2.0*random->uniform()-1.0)*vm;
-            pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
-            if(pmx < pv2) error->one(FLERR,"not bounded");
-            if(pmx*random->uniform() < pv2) break;
+            v[0] = vv*cx;
+            v[1] = vv*cy;
+            v[2] = vv*cz;
+            found = 1;
           }
-          v[i] = vs;
-        }*/
-
-        double vpx, vpy, vpz;
-        while(true) {
-          vpx = (2.0*random->uniform()-1.0)*vm;
-          vpy = (2.0*random->uniform()-1.0)*vm;
-          vpz = (2.0*random->uniform()-1.0)*vm;
-          vs = sqrt(vpx*vpx + vpy*vpy + vpz*vpz);
-          pv2 = exp(-A*vs*vs)*(1.0+beta0*(A*vs*vs - 1.5));
-          if(pmx < pv2) error->one(FLERR,"not bounded");
-          if(pmx*random->uniform() < pv2) break;
         }
-
-        v[0] = vpx;
-        v[1] = vpy;
-        v[2] = vpz;
-
       } else {
         vn = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
         vr = vscale[isp] * sqrttempscale * sqrt(-log(random->uniform()));
         theta1 = MY_2PI * random->uniform();
         theta2 = MY_2PI * random->uniform();
+
         if (velflag) {
           velocity_variable(x,vstream,vstream_variable);
           v[0] = vstream_variable[0] + vn*cos(theta1);
@@ -861,7 +836,7 @@ void CreateParticles::create_local_twopass(bigint np)
         sqrttempscale = sqrt(tempscale);
       }
 
-      if(BKWflag) {
+      if(bkw) {
         // sample from initial BKW solution
         double m2kT = 1.0/(vscale[isp]*vscale[isp]); // m / 2kT
         double A = m2kT*(1.0+beta0);

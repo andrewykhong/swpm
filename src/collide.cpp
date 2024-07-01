@@ -452,7 +452,7 @@ void Collide::modify_params(int narg, char **arg)
       if (nearcp && nearlimit <= 0)
         error->all(FLERR,"Illegal collide_modify command");
       iarg += 3;
-    } else if (strcmp(arg[iarg],"reduceMin") == 0) {
+    } else if (strcmp(arg[iarg],"separate") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide_modify command");
       if (strcmp(arg[iarg+1],"yes") == 0) reduceMinFlag = 1;
       else if (strcmp(arg[iarg+1],"no") == 0) reduceMinFlag = -1;
@@ -468,7 +468,7 @@ void Collide::modify_params(int narg, char **arg)
       Ggamma = atof(arg[iarg+3]);
       if(Ggamma < 0) Ggamma = 1;
       iarg += 4;
-    } else if (strcmp(arg[iarg],"ENRGY") == 0) {
+    } else if (strcmp(arg[iarg],"energy") == 0) {
       if (iarg+3 > narg) error->all(FLERR,"Illegal collide_modify command");
       reduction_type = 0;
       npThresh = 2;
@@ -476,7 +476,7 @@ void Collide::modify_params(int narg, char **arg)
       npmx = atof(arg[iarg+2]); // max per group
       if(npmx <= npThresh) error->all(FLERR,"Too few particles per group");
       iarg += 3;
-    } else if (strcmp(arg[iarg],"RW") == 0) {
+    } else if (strcmp(arg[iarg],"heat") == 0) {
       if (iarg+3 > narg) error->all(FLERR,"Illegal collide_modify command");
       reduction_type = 1;
       npThresh = 2;
@@ -484,7 +484,7 @@ void Collide::modify_params(int narg, char **arg)
       npmx = atof(arg[iarg+2]); // max per group
       if(npmx <= npThresh) error->all(FLERR,"Too few particles per group");
       iarg += 3;
-    } else if (strcmp(arg[iarg],"LGZ") == 0) {
+    } else if (strcmp(arg[iarg],"stress") == 0) {
       if (iarg+3 > narg) error->all(FLERR,"Illegal collide_modify command");
       reduction_type = 2;
       npThresh = 6;
@@ -2225,19 +2225,6 @@ template < int NEARCP > void Collide::collisions_one_sw()
   Particle::OnePart *particles = particle->particles;
   int *next = particle->next;
 
-  /*printf("before split\n");
-  for (int icell = 0; icell < nglocal; icell++) {
-    np = cinfo[icell].count;
-    ip = cinfo[icell].first;
-    n = 0;
-    while (ip >= 0) {
-      ipart = &particles[ip];
-      printf(" -- s -- ip: %i; gi: %4.3e; v: %4.3e,%4.3e,%4.3e\n",
-        ip, ipart->sw, ipart->v[0], ipart->v[1], ipart->v[2]);
-      ip = next[ip];
-    }
-  }*/
-
   for (int icell = 0; icell < nglocal; icell++) {
     cinfo[icell].ndel = 0;
     np = cinfo[icell].count;
@@ -2257,11 +2244,6 @@ template < int NEARCP > void Collide::collisions_one_sw()
       memory->create(pU,npmax,"collide:pU");
     }
 
-    // Merge before collisions
-    // create particle list
-    // AND calculate total weight, max weight, and min weight for selections and probability
-    // gmn should be assumed to be zero in case more than one collision occurs where particle
-    // ... weight becomes smaller than gmn
     n = 0;
     gsum = gmx = gmn = 0.0;
     while (ip >= 0) {
@@ -2297,55 +2279,12 @@ template < int NEARCP > void Collide::collisions_one_sw()
 
     for(int iattempt = 0; iattempt < nattempt; iattempt++) {
 
-      /*if(np == 2) {
-        i = 0;
-        ipart = &particles[plist[i]];
-        j = 1;
-        jpart = &particles[plist[j]];
-      } else {
-        // assume gmin = 0
-        // use accept-reject
-        // cf 3.96 + 3.97 stochastic numerics BE
-        pacc = 0;
-        pmx = ((np - 2)*gmx + gsum)/(2*(np - 1)*gsum); // expedites selection
-        while(pacc/pmx < random->uniform()) {
-          i = np * random->uniform();
-          ipart = &particles[plist[i]];
-          gi = ipart->sw;
-          pacc = ((np - 2)*gi + gsum)/(2*(np - 1)*gsum); // c1 = gsum
-        }
-
-        pacc = 0;
-        j = i;
-        pmx = (gi + gmx)/((np-2)*gi + gsum); // expedites selection
-        int itry = 0;
-        while(pacc/pmx < random->uniform() || i==j) {
-          j = np * random->uniform();
-          while(i == j) j = np * random->uniform();
-          jpart = &particles[plist[j]];
-          gj = jpart->sw;
-          pacc = (gi + gj)/((np-2)*gi + gsum); // c1 = gi
-          if(itry>np) break;
-          itry++;
-        }
-
-        // probabilities similar since all very small
-        // randomly choose
-        if(itry>np) {
-          j = i;
-          while(i==j) j = np * random->uniform();
-          jpart = &particles[plist[j]];
-        }
-      }*/
-
       i = np * random->uniform();
       j = np * random->uniform();
       while (i == j) j = np * random->uniform();
       ipart = &particles[plist[i]];
       jpart = &particles[plist[j]];
-      //printf("i: %i; j: %i; np: %i\n", i, j, np);
 
-      //if (!test_collision_sum(icell,0,0,ipart,jpart)) continue;
       if (!test_collision_max(icell,0,0,ipart,jpart)) continue;
 
       // +2 (split)
@@ -2424,21 +2363,6 @@ template < int NEARCP > void Collide::collisions_one_sw()
     }
 
   }// loop for cells
-
-  // print particles after split
-  /*for (int icell = 0; icell < nglocal; icell++) {
-    np = cinfo[icell].count;
-    ip = cinfo[icell].first;
-    n = 0;
-    gsum = gmx = gmn = 0.0;
-    while (ip >= 0) {
-      ipart = &particles[ip];
-      gi = ipart->sw;
-      //printf("ip: %i; gi: %4.3e\n", ip, ipart->sw);
-      ip = next[ip];
-    }
-  }*/
-  //error->one(FLERR,"check");
 }
 
 /* ----------------------------------------------------------------------
@@ -2546,7 +2470,7 @@ void Collide::sw_reduce_group()
       // find upper and lower bounds such that lower has at least 15% and
       // ... upper has at least 95%
 
-      lL = MAX(gmean-gstd,0);
+      lL = MAX(gmean-1.25*gstd,0);
       uL = gmean+2.0*gstd;
 
       // Would like all reduced particles to have gmean as weight
@@ -2561,7 +2485,7 @@ void Collide::sw_reduce_group()
         double g = ipart->sw;
         if(g > 0 && g <= lL) pL[nL++] = ip;
         else if(g > lL && g <= uL) pLU[nLU++] = ip;
-        else pU[nU++] = ip;
+        else if(g > uL) pU[nU++] = ip;
         ip = next[ip];
       }
       divideMerge(pL,nL);
@@ -2633,12 +2557,41 @@ void Collide::divideMerge(int *node_pid, int np)
 
   // Compute central stress
   double pij[3][3], q[3];
-  for(int i = 0; i < 3; i++) {
-    for(int j = 0; j < 3; j++) {
+  for(int i = 0; i < 3; i++)
+    for(int j = 0; j < 3; j++)
       pij[i][j] = gVV[i][j] - gsum*V[i]*V[j];
-      Rij[i][j] = pij[i][j]/gsum; 
-    } // end j
-  } // end i
+
+  // normalize the weight
+  double gnorm[np];
+  double g2sum = 0.0;
+  for(int p = 0; p < np; p++) {
+    ip = &particles[node_pid[p]];
+    gnorm[p] = ip->sw/gsum;
+    g2sum += gnorm[p];
+  }
+
+  for(int i = 0; i < 3; i++)
+    for(int j = 0; j < 3; j++)
+      Rij[i][j] = 0.0;
+
+  for(int p = 0; p < np; p++) {
+    ip = &particles[node_pid[p]];
+    memcpy(vp, ip->v, 3*sizeof(double));
+    Rij[0][0] += (vp[0]-V[0])*(vp[0]-V[0])*gnorm[p];
+    Rij[0][1] += (vp[0]-V[0])*(vp[1]-V[1])*gnorm[p];
+    Rij[0][2] += (vp[0]-V[0])*(vp[2]-V[2])*gnorm[p];
+    Rij[1][1] += (vp[1]-V[1])*(vp[1]-V[1])*gnorm[p];
+    Rij[1][2] += (vp[1]-V[1])*(vp[2]-V[2])*gnorm[p];
+    Rij[2][2] += (vp[2]-V[2])*(vp[2]-V[2])*gnorm[p];
+  }
+  
+  Rij[1][0] = Rij[0][1];
+  Rij[2][0] = Rij[0][2];
+  Rij[2][1] = Rij[1][2];
+
+  for(int i = 0; i < 3; i++)
+    for(int j = 0; j < 3; j++)
+      Rij[i][j] /= (1.0 - g2sum);
 
 /*------------------------------------------------------------------------ */
 
@@ -2971,127 +2924,3 @@ void Collide::merge()
 }
 
 
-/* ----------------------------------------------------------------------
-   Same as sw_reduce_group() but based on speed
-------------------------------------------------------------------------- */
-
-void Collide::sw_reduce_dev()
-{
-  /*int i,j,m,n,p,ip,np;
-  int nattempt,reactflag;
-  double attempt,volume;
-  Particle::OnePart *ipart;
-  Grid::ChildInfo *cinfo = grid->cinfo;
-  Particle::OnePart *particles = particle->particles;
-  int *next = particle->next;
-  Grid::ChildCell *cells = grid->cells;
-
-  //int redFlag = 0;
-  //double xl[3], xh[3], xp[3];
-  //double subdx, subdy, subdz;
-  double smean, svar, sstd;
-  double g, gsum, spd, gspd;
-  double uL, lL;
-  int nL, nLU, nU;
-
-  for (int icell = 0; icell < nglocal; icell++) {
-    cinfo[icell].ndel = 0;
-    // create particle list
-    ip = cinfo[icell].first;
-    n = 0;
-    while (ip >= 0) {
-      plist[n++] = ip;
-      ip = next[ip];
-    }
-    if (n <= Nmax) continue;
-
-    // there should not be so many collisions for this to be called more than once
-    while(n >= Nmax) {
-
-      // find mean speed
-      gsum = smean = 0.0;
-      ip = cinfo[icell].first;
-      n = 0;
-      while (ip >= 0) {
-        ipart = &particles[ip];
-        g = ipart->sw;
-
-        if(g > 0) {
-          n++;
-          spd = sqrt(
-            ipart->v[0]*ipart->v[0] +
-            ipart->v[1]*ipart->v[1] +
-            ipart->v[2]*ipart->v[2]);   
-          smean += g*spd;
-          gsum += g;
-        }
-        ip = next[ip];
-      }
-      smean /= gsum;
-
-      // find variance of speed
-      svar = 0.0;
-      ip = cinfo[icell].first;
-      n = 0;
-      while (ip >= 0) {
-        ipart = &particles[ip];
-        g = ipart->sw;
-
-        if(g > 0) {
-          n++;
-          spd = sqrt(
-            ipart->v[0]*ipart->v[0] +
-            ipart->v[1]*ipart->v[1] +
-            ipart->v[2]*ipart->v[2]);  
-          svar += g*(spd - smean)*(spd - smean);
-        }
-        ip = next[ip];
-      }
-      svar /= gsum;
-      sstd = sqrt(svar);
-      if(svar < 0) error->one(FLERR,"negative variance for speed");
-
-      // find upper and lower bounds such that lower has at least 15% and
-      // ... upper has at least 95%
-
-      lL = MAX(smean-sstd,0);
-      uL = smean + sstd;
-
-      // Count number reduced this iteration
-      dnRed = 0;
-
-      // separate by speed and merge
-      ip = cinfo[icell].first;
-      nL = nLU = nU = 0;
-      while (ip >= 0) {
-        ipart = &particles[ip];
-        if(ipart->sw > 0) {
-          spd = sqrt(
-            ipart->v[0]*ipart->v[0] +
-            ipart->v[1]*ipart->v[1] +
-            ipart->v[2]*ipart->v[2]);  
-          if(spd >= uL) pU[nU++] = ip;
-          else if(spd >= lL) pLU[nLU++] = ip;
-          else pL[nL++] = ip;
-        }
-        ip = next[ip];
-      }
-      divideMerge(pL,nL);
-      divideMerge(pLU,nLU);
-      divideMerge(pU,nU);
-
-      ip = cinfo[icell].first;
-      n = 0;
-      while (ip >= 0) {
-        ipart = &particles[ip];
-        double g = ipart->sw;
-        if(g > 0) n++;
-        if(g > 1e12) error->one(FLERR,"massive particle");
-        ip = next[ip];
-      }
-      cinfo[icell].ndel += dnRed;
-
-    } // end while
-  }// loop for cells
-  */
-}

@@ -45,7 +45,7 @@ variable vb        equal ${Ma}*${a}
 ###########
 species            air.species Ar
 
-mixture            air Ar vstream ${vb} 0.0 0.0 temp ${T}
+mixture            air Ar vstream 0.0 0.0 0.0 temp ${T}
 mixture            air Ar frac 1.0
 
 collide            vss air opt.vss
@@ -110,32 +110,32 @@ print " Diffusion time in dt=${Nsteady}"
 ###########
 # Outputs #
 ###########
-compute state      thermal/grid/sw all all temp press
-compute rho        grid/sw all all n nrho
-compute vel        grid/sw all all u v w
-compute mom        pflux/grid/sw all all momxx momyy momzz momxy momyz momxz
-compute q          eflux/grid/sw all all heatx heaty heatz
+compute state      thermal/grid all all temp press
+compute rho        grid all all n nrho
+compute vel        grid all all u v w
+compute mom        pflux/grid all all momxx momyy momzz momxy momyz momxz
+compute q          eflux/grid all all heatx heaty heatz
 
 #############
 # Transient #
 #############
-stats              100000
+stats              1000
 stats_style        step np nattempt ncoll
 
 timestep           ${dt}
-run                50000000
+run                20000000
 
 #################
 # Collect Stats #
 #################
-fix state         ave/grid all 5 2000 10000 c_state[*]  ave running
-fix rho           ave/grid all 5 2000 10000 c_rho[*]    ave running
-fix vel           ave/grid all 5 2000 10000 c_vel[*]    ave running
-fix mom           ave/grid all 5 2000 10000 c_mom[*]    ave running
-fix q             ave/grid all 5 2000 10000 c_q[*]      ave running
+fix state         ave/grid all 5 200 1000 c_state[*]  ave running
+fix rho           ave/grid all 5 200 1000 c_rho[*]    ave running
+fix vel           ave/grid all 5 200 1000 c_vel[*]    ave running
+fix mom           ave/grid all 5 200 1000 c_mom[*]    ave running
+fix q             ave/grid all 5 200 1000 c_q[*]      ave running
 
-dump state        grid all 50000000 state.* id yc f_rho[*] f_state[*]
-dump vel          grid all 50000000 vel.*   id yc f_vel[*]
-dump mom          grid all 50000000 vmom.*  id yc f_mom[*] f_q[*]
+dump state        grid all 1000000 state.* id yc f_rho[*] f_state[*]
+dump vel          grid all 1000000 vel.*   id yc f_vel[*]
+dump mom          grid all 1000000 vmom.*  id yc f_mom[*] f_q[*]
 
-run               200000000
+run               20000000

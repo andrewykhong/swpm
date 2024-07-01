@@ -34,8 +34,8 @@ class CreateParticles : protected Pointers {
   double erot(int);
 
  protected:
-  int imix,single,mspecies,twopass;
-  double xp,yp,zp,vx,vy,vz;
+  int imix,single,mspecies,twopass,bkw;
+  double xp,yp,zp,vx,vy,vz,beta0;
   class Region *region;
 
   int speciesflag,densflag,velflag,tempflag,normflag;
@@ -60,9 +60,6 @@ class CreateParticles : protected Pointers {
   double temperature_variable(double *);
   void velocity_variable(double *, double *, double *);
   int outside_region(int, double *, double *);
-
-  int BKWflag;
-  double beta0;
 };
 
 }

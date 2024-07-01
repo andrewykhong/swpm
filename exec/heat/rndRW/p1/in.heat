@@ -45,14 +45,8 @@ variable vb        equal ${Ma}*${a}
 ###########
 species            air.species Ar
 
-mixture            air Ar vstream ${vb} 0.0 0.0 temp ${T}
+mixture            air Ar vstream 0.0 0.0 0.0 temp ${T}
 mixture            air Ar frac 1.0
-
-collide            vss air opt.vss
-collide_modify     remain no
-
-collide_modify  swpm yes -1.0 1.0
-collide_modify  RW 128.0 4.0
 
 #####################
 # Boundary/Geometry #
@@ -76,6 +70,13 @@ surf_collide       2 diffuse 400 1.0 translate 0.0 0.0 0.0
 
 bound_modify       ylo collide 1
 bound_modify       yhi collide 2
+
+collide            vss air opt.vss
+collide_modify     remain no
+
+collide_modify  swpm yes -1.0 1.0
+collide_modify  heat 128.0 4.0
+collide_modify  separate no
 
 variable N         equal ${ny}*${ppc}
 variable Fnum      equal ${nden}/(${N}/(${Lx}*${Ly}*${Lz}))
@@ -126,7 +127,7 @@ stats              1000
 stats_style        step np nattempt ncoll
 
 timestep           ${dt}
-run                15000000
+run                20000000
 
 #################
 # Collect Stats #
@@ -137,8 +138,8 @@ fix vel           ave/grid all 5 200 1000 c_vel[*]    ave running
 fix mom           ave/grid all 5 200 1000 c_mom[*]    ave running
 fix q             ave/grid all 5 200 1000 c_q[*]      ave running
 
-dump state        grid all 500000 state.* id yc f_rho[*] f_state[*]
-dump vel          grid all 500000 vel.*   id yc f_vel[*]
-dump mom          grid all 500000 vmom.*  id yc f_mom[*] f_q[*]
+dump state        grid all 1000000 state.* id yc f_rho[*] f_state[*]
+dump vel          grid all 1000000 vel.*   id yc f_vel[*]
+dump mom          grid all 1000000 vmom.*  id yc f_mom[*] f_q[*]
 
-run               3000000
+run               20000000

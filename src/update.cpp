@@ -1527,6 +1527,12 @@ void Update::global(int narg, char **arg)
       fnum = input->numeric(FLERR,arg[iarg+1]);
       if (fnum <= 0.0) error->all(FLERR,"Illegal global command");
       iarg += 2;
+    // can define different fnum for emit (for swpm)
+    } else if (strcmp(arg[iarg],"fnum/emit") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      fnum_emit = input->numeric(FLERR,arg[iarg+1]);
+      if (fnum_emit <= 0.0) error->all(FLERR,"Illegal global command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"nrho") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       nrho = input->numeric(FLERR,arg[iarg+1]);
